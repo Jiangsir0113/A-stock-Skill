@@ -1,62 +1,17 @@
-# Codex Skills Collection
+# A Share Stock Picker
 
 ## 介绍
 
-这是一个面向 Codex 的技能仓库，当前包含两个可直接复用的 skill：
+`a-share-stock-picker` 是一个面向 Codex 的 A 股选股 skill，适用于盘后到次日开盘前的观察池整理、短中长线候选分析和条件交易计划输出。
 
-- `a-share-stock-picker`：用于 A 股盘后到次日开盘前的选股、观察池整理和条件交易计划输出
-- `java-architect-assistant`：用于既有 Java 项目的需求分析、功能开发、Bug 修复、性能优化和代码审查
+这个仓库提供的不是单纯提示词，而是一套完整的 skill 包，包含：
 
-这两个 skill 都不是“泛用提示词模板”，而是带有明确工作流、参考资料、脚本和输出规范的可执行技能目录。
+- `SKILL.md`：核心行为定义
+- `references/`：选股框架、价格规则、输出模板和使用说明
+- `scripts/`：行情抓取、候选打分、指标计算、催化抓取和报告生成脚本
+- `agents/`：agent 配置
 
-## 仓库结构
-
-```text
-.
-├── README.md
-├── README.en.md
-├── LICENSE
-├── a-share-stock-picker
-│   ├── SKILL.md
-│   ├── agents/
-│   ├── references/
-│   └── scripts/
-└── java-architect-assistant
-    ├── SKILL.md
-    ├── agents/
-    ├── references/
-    └── scripts/
-```
-
-## Skill 概览
-
-| Skill | 适用场景 | 核心特点 |
-| --- | --- | --- |
-| `a-share-stock-picker` | 推荐 A 股标的、盘前观察池、短中长线候选、条件交易计划 | 以最近一个完整交易日为价格锚点，结合历史走势、催化、披露和结构化打分，默认输出观察池而非生硬喊单 |
-| `java-architect-assistant` | Java 功能开发、修复 bug、性能优化、代码审查、PRD/原型分析 | 先分析需求和项目结构，再输出计划；默认低侵入；修改旧代码和旧方法前要求显式确认 |
-
-## 安装方式
-
-### 方式一：手动安装到 Codex skills 目录
-
-将需要的 skill 目录复制到本机 Codex skills 目录，例如：
-
-```bash
-cp -R a-share-stock-picker ~/.codex/skills/
-cp -R java-architect-assistant ~/.codex/skills/
-```
-
-如果你要同时使用两个 skill，可以一起复制。
-
-### 方式二：作为本地技能仓库维护
-
-如果你希望持续维护或二次开发这些 skill，可以保留整个仓库，并按需同步其中某个 skill 到 `~/.codex/skills/`。
-
-## 使用说明
-
-### 1. `a-share-stock-picker`
-
-#### 适合做什么
+## 适用场景
 
 - `推荐股票`
 - `盘前选股`
@@ -64,22 +19,52 @@ cp -R java-architect-assistant ~/.codex/skills/
 - `给我短中长线标的`
 - `给我条件交易计划`
 
-#### 工作方式
+## 核心特点
 
-- 默认覆盖短线、中线、长线三个周期
+- 仅覆盖中国大陆 A 股
+- 默认同时覆盖短线、中线、长线三个周期
 - 使用最近一个已完成交易日作为主要价格锚点
 - 结合近 5 日、20-60 日、6-12 个月历史窗口判断结构
-- 优先输出 `观察池 / 候选名单 / 条件计划`
-- 只有在价格新鲜且已验证时，才给出更精确的买入、止损和目标位
+- 优先输出 `观察池 / 候选名单 / 条件交易计划`
+- 数据验证不足时，不强行给出绝对化买卖建议
 
-#### 内置能力
+## 仓库结构
+
+```text
+.
+├── LICENSE
+├── README.md
+├── README.en.md
+└── a-share-stock-picker
+    ├── SKILL.md
+    ├── agents/
+    ├── references/
+    └── scripts/
+```
+
+实际安装到 Codex 的 skill 目录是：
+
+```text
+a-share-stock-picker/a-share-stock-picker
+```
+
+## 内置能力
+
+### 数据与分析
 
 - 拉取 A 股行情与历史数据
 - 计算均线、ATR、MACD 线索和量比等技术指标
-- 获取个股催化、新闻摘要和基础上下文
-- 生成中文 Markdown 选股报告
+- 获取个股催化、新闻摘要和上下文信息
+- 将候选按短线、中线、长线进行打分和分桶
 
-#### 主要脚本
+### 输出与表达
+
+- 生成中文 Markdown 选股报告
+- 支持结构化表格输出
+- 优先使用条件触发式交易语言
+- 在数据新鲜且验证充分时，才升级到更精确的价格计划
+
+## 主要脚本
 
 - `scripts/fetch_quotes.py`
 - `scripts/build_watchlist.py`
@@ -89,103 +74,37 @@ cp -R java-architect-assistant ~/.codex/skills/
 - `scripts/render_report.py`
 - `scripts/run_picker.py`
 
-#### 调用示例
+## 使用方式
+
+### 安装到 Codex
+
+```bash
+cp -R a-share-stock-picker ~/.codex/skills/
+```
+
+### 调用示例
 
 ```text
-使用 $a-share-stock-picker 给我一份盘前 A 股观察池，按短线、中线、长线各给 3 个标的。
+使用 $a-share-stock-picker 给我一份盘前 A 股观察池，短线、中线、长线各 3 只。
 ```
 
 ```text
 使用 $a-share-stock-picker 基于收盘后信息，输出均衡型候选名单和条件交易计划。
 ```
 
-#### 注意事项
+### 推荐工作方式
 
-- 仅覆盖中国大陆 A 股
-- 更适合盘后到次日开盘前窗口
-- 不建议在数据未验证时直接给出绝对化买卖结论
+- 先抓取行情和历史数据
+- 再结合催化、新闻和披露信息
+- 最后输出观察池或条件交易计划
 
-### 2. `java-architect-assistant`
+如果要给出精确买点、止损和目标位，应确保底层价格数据是最新且已验证的。
 
-#### 适合做什么
+## 注意事项
 
-- Java 功能开发
-- Bug 修复
-- 性能优化
-- 代码审查
-- PRD、原型图、截图、蓝湖链接分析
-- 按当前工程风格生成 Java/SQL/配置代码
-
-#### 工作方式
-
-- 先理解需求，再学习项目结构和代码风格
-- 先给计划，再实施
-- 默认优先走低侵入方案
-- 能新增文件解决时，尽量不直接改旧逻辑
-- 修改现有代码、尤其是修改旧方法前，要求用户明确确认
-
-#### 关键能力
-
-- 自动识别模块、包结构、分层和资源目录
-- 根据现有代码学习 Controller、Service、Mapper、DTO、VO 等模板风格
-- 对 SQL、事务、缓存、MQ、锁、线程和接口影响做实现前规划
-- 支持 URL 类需求输入，并优先通过内置 MCP URL Reader 读取内容
-
-#### 调用示例
-
-```text
-使用 $java-architect-assistant 处理这个需求。
-先分析需求和当前工程风格，输出计划，再开始改代码。
-未经我同意不要改原有方法；如果要复用旧方法，先问我是改原方法还是新写方法。
-```
-
-```text
-使用 $java-architect-assistant 修复这个 bug。
-我会提供报错日志和相关代码，你先定位根因并给修复计划。
-```
-
-```text
-使用 $java-architect-assistant 显示使用说明
-```
-
-#### URL / PRD 读取
-
-当需求来自 URL、PRD 或蓝湖时，建议先启动本地 MCP：
-
-```bash
-bash /Users/tudoushaoyangyu/.codex/skills/java-architect-assistant/scripts/start_url_reader_mcp.sh
-```
-
-如果页面依赖登录态，还需要向 skill 提供必要的 headers、cookies 或其他访问上下文。
-
-## 设计原则
-
-### `a-share-stock-picker`
-
-- 证据优先，不凭印象喊单
-- 观察池优先，不在证据不足时强行给绝对建议
-- 价格计划必须基于最新已验证数据和历史结构
-
-### `java-architect-assistant`
-
-- 理解优先于修改
-- 规划优先于编码
-- 扩展优先于重写
-- 配置、常量、枚举优先于硬编码
-- 未经确认不修改旧代码和旧方法
-
-## 适合谁使用
-
-- 想把 Codex 变成“可复用工作流”而不只是单次对话的人
-- 需要沉淀领域化开发规范、脚本和参考文档的团队
-- 希望让选股分析或 Java 交付过程更稳定、更可复制的人
-
-## 贡献方式
-
-1. Fork 本仓库
-2. 新建分支进行修改
-3. 补充或更新 `SKILL.md`、`references/`、`scripts/`
-4. 提交变更并发起 Pull Request
+- 最适合盘后到次日开盘前时段
+- 不建议在盘中未校验数据的情况下直接下精确结论
+- 如果证据不足，应退回观察池或条件计划表达
 
 ## License
 
