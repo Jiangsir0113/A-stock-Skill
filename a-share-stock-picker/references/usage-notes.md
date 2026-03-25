@@ -47,3 +47,21 @@ Prefer this execution sequence:
 8. Run `scripts/render_report.py` on the watchlist JSON to produce the Chinese markdown output
 9. Or use `scripts/run_picker.py` as the one-shot wrapper
 10. Upgrade to exact price plans only after verifying freshness and structure
+
+## Tail-Entry Preference
+
+If the user wants a practical `T+1` short-term workflow:
+
+1. use the normal post-close or pre-open flow to build a larger candidate pool
+2. during trading day `D`, refresh quotes in the final hour
+3. run `scripts/fetch_intraday_snapshot.py` on the quote payload
+4. run `scripts/build_tail_watchlist.py` to score names for tail entry quality
+5. render the result with `scripts/render_t1_plan.py`
+6. or use `scripts/run_t1_tail_trade.py` as the one-shot wrapper
+
+In this mode, prefer wording such as:
+
+- `今日尾盘建仓计划`
+- `D+1卖出计划`
+- `高开先兑现`
+- `低开跌破隔夜止损线则保护离场`

@@ -11,6 +11,8 @@ Recommend mainland A-share candidates for three horizons in one pass: short term
 
 Default to an evidence-based watchlist with conditional entry plans rather than unconditional "buy these tomorrow" language. If the user explicitly wants exact entry, stop, and target levels, provide them only when the underlying price data is fresh and verified.
 
+In addition to the default post-close to pre-open workflow, this skill can also run a dedicated `T+1 tail-entry mode` for users who want to buy near the close of day `D` and sell on day `D+1`.
+
 Only cover mainland A-shares. Do not recommend Hong Kong stocks, US equities, ETFs, funds, or convertibles unless the user explicitly asks for them.
 
 ## Scripts
@@ -24,6 +26,10 @@ Use bundled scripts when possible:
 - `scripts/fetch_news_summary.py <ticker...>`: fetch lightweight page-description summaries as catalyst context
 - `scripts/render_report.py <watchlist.json> [catalysts.json] [indicators.json] [news_summary.json]`: render a Chinese markdown watchlist report with names, sectors, indicators, and conditional trade-plan wording
 - `scripts/run_picker.py <ticker...>`: one-shot entry point that fetches quotes, scores candidates, pulls catalyst clues, computes indicators, and writes the final report
+- `scripts/fetch_intraday_snapshot.py <quotes.json>`: turn minute-level Tonghuashun data into a tail-session snapshot for day `D`
+- `scripts/build_tail_watchlist.py <quotes.json> <intraday_snapshot.json>`: score candidates for `T+1` tail entry quality
+- `scripts/render_t1_plan.py <tail_watchlist.json> [catalysts.json] [news_summary.json]`: render a `D日尾盘建仓 / D+1卖出` markdown plan
+- `scripts/run_t1_tail_trade.py <ticker...>`: one-shot entry point for the `T+1` tail-entry workflow
 
 ## Operating Window
 
@@ -35,6 +41,14 @@ Default operating window:
 Use the latest completed session as the main price anchor. Add overnight policy, company, and macro updates that arrive before the answer is produced.
 
 If the user asks during trading hours, say that this skill is optimized for the post-close to pre-open window and adapt cautiously.
+
+Alternative operating window for `T+1 tail-entry mode`:
+
+- Start: roughly `14:00` on trading day `D`
+- Decision window: `14:20-14:57` on trading day `D`
+- Exit window: next trading day `D+1`
+
+Use recent historical structure plus same-day minute data to decide whether a tail entry is still tradable. Do not write same-day buy and same-day sell instructions for A-shares as if they were directly executable.
 
 ## Workflow
 
@@ -145,6 +159,21 @@ Prefer "观察池 / 候选名单 / 条件计划" wording. When a direct buy reco
 - `仅在回踩支撑不破时考虑`
 - `高开过多则放弃`
 
+### 6. Switch modes when the user wants tail entry
+
+If the user explicitly wants a short-term plan that can be bought before the close and sold the next day, switch from the default pre-open mode to `T+1 tail-entry mode`.
+
+In that mode:
+
+1. use the normal workflow to build a larger candidate pool first when practical
+2. fetch same-day minute data in the final trading hour
+3. score names for tail strength, liquidity, and next-day tradability
+4. output two linked plans:
+   - `今日尾盘建仓计划`
+   - `D+1卖出计划`
+5. make sure the buy instructions are for day `D` and the sell instructions are for day `D+1`
+6. if the tail trigger weakens before the close, cancel the entry instead of forcing a trade
+
 ## Safety And Quality Guardrails
 
 - Do not pretend to have live verified prices if the sources cannot be fetched.
@@ -209,3 +238,4 @@ Load:
 - `references/price-plan-rules.md` for buy, stop, and target derivation
 - `references/output-template.md` for the final answer format
 - `references/usage-notes.md` for watchlist-first phrasing and balanced-style response shaping
+- `references/t1-tail-mode.md` for the dedicated `T+1` tail-entry workflow

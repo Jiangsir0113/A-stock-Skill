@@ -12,6 +12,18 @@ This skill is built for:
 
 Treat the latest completed session as the primary price anchor.
 
+## Tail-Entry Window
+
+When the user explicitly wants a same-day tail entry for a `T+1` exit:
+
+- collect the full recent historical window as usual
+- add same-day minute data from `v6/time/.../defer/last.js`
+- use `14:00-15:00` as the execution analysis window
+- treat the current trading day as the entry day `D`
+- treat the next trading day as the sell day `D+1`
+
+In this mode, the buy plan should be written for day `D` tail execution and the sell plan for day `D+1`, instead of pretending both happen on the same day
+
 ## Source Priority
 
 For A-shares, collect price and market data in this order:
