@@ -6,6 +6,7 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent
 NAMES_PATH = BASE / "references" / "ticker_names.json"
+TAIL_ENTRY_COUNT = 5
 
 
 def load_names():
@@ -59,7 +60,7 @@ def main():
     catalysts = load_json_map(sys.argv[2]) if len(sys.argv) >= 3 else {}
     news = load_json_map(sys.argv[3]) if len(sys.argv) >= 4 else {}
     names = load_names()
-    rows = watchlist.get("tail_entry", [])[:3]
+    rows = watchlist.get("tail_entry", [])[:TAIL_ENTRY_COUNT]
 
     parts = [
         "# A股T+1尾盘建仓计划",

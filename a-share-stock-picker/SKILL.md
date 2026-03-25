@@ -13,6 +13,8 @@ Default to an evidence-based watchlist with conditional entry plans rather than 
 
 In addition to the default post-close to pre-open workflow, this skill can also run a dedicated `T+1 tail-entry mode` for users who want to buy near the close of day `D` and sell on day `D+1`.
 
+When `T+1 tail-entry mode` is used, default to exactly `5` tail-entry candidates per run when enough qualified names are available.
+
 Only cover mainland A-shares. Do not recommend Hong Kong stocks, US equities, ETFs, funds, or convertibles unless the user explicitly asks for them.
 
 ## Scripts
@@ -168,11 +170,26 @@ In that mode:
 1. use the normal workflow to build a larger candidate pool first when practical
 2. fetch same-day minute data in the final trading hour
 3. score names for tail strength, liquidity, and next-day tradability
-4. output two linked plans:
+4. narrow the final tail-entry list to `5` names when enough qualified candidates exist
+5. output two linked plans:
    - `今日尾盘建仓计划`
    - `D+1卖出计划`
-5. make sure the buy instructions are for day `D` and the sell instructions are for day `D+1`
-6. if the tail trigger weakens before the close, cancel the entry instead of forcing a trade
+6. make sure the buy instructions are for day `D` and the sell instructions are for day `D+1`
+7. if the tail trigger weakens before the close, cancel the entry instead of forcing a trade
+
+Recommended prompt templates for this mode:
+
+- `14:10` pre-screen:
+  `使用 $a-share-stock-picker 按 T+1 尾盘建仓模式，先做一版预备观察池。请基于当前盘中信息，输出今日尾盘可买、次日可卖的 A 股短线计划，先给我 5 个候选，并标出优先级。`
+- `14:30+` final refresh:
+  `使用 $a-share-stock-picker 在 14:30 之后重新分析。请输出今日尾盘建仓计划和次日卖出计划，按 T+1 模式给我 5 个最终候选，并按可执行优先级排序。`
+- `D+1 09:25` sell review:
+  `使用 $a-share-stock-picker 复核我昨天的 T+1 尾盘建仓计划。请结合今日竞价和开盘前信息，输出这 5 只的今日卖出优先级、止盈位、止损位和放弃条件。`
+
+Wording rule:
+
+- on trading day `D`, write `今日尾盘建仓计划` + `次日卖出计划`
+- on trading day `D+1`, if reviewing yesterday's tail-entry plan, write `今日卖出计划` instead of `明日卖出计划`
 
 ## Safety And Quality Guardrails
 

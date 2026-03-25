@@ -13,7 +13,7 @@ This mode solves that by moving the short-term execution point to the final hour
 Recommended time slices:
 
 1. `14:00-14:20`: pull intraday data and refresh the candidate pool
-2. `14:20-14:40`: score tail-entry quality and narrow to `3-5` names
+2. `14:20-14:40`: score tail-entry quality and narrow to `5` names
 3. `14:45-14:57`: output the final tail-entry plan and execute only if the trigger still holds
 4. `D+1 09:20-09:30`: refresh the overnight context
 5. `D+1 09:30-10:30`: execute the main sell plan
@@ -58,6 +58,10 @@ When this mode is used, produce two linked plans:
 2. `次日卖出计划`
 
 The important shift is that buy and sell instructions are no longer written as if they happen on the same day.
+
+Default output size for this mode:
+
+- `5` tail-entry candidates per run when enough qualified names are available
 
 Recommended fields for the entry table:
 
