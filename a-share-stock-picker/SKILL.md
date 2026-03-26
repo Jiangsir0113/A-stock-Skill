@@ -46,6 +46,13 @@ Default operating window:
 
 Use the latest completed session as the main price anchor. Add overnight policy, company, and macro updates that arrive before the answer is produced.
 
+Anchor-date rule for the default post-close / pre-open workflow:
+
+- if the current local time is before the A-share cash-session close on trading day `D`, treat trading day `D-1` as the latest completed session
+- if the current local time is after the A-share cash-session close on trading day `D`, treat trading day `D` as the latest completed session and write the report as trading day `D+1` pre-open context
+- when the user appears to mix up `today`, `tomorrow`, `盘前`, or the anchor date, explicitly state both absolute dates in the answer
+- do not write a `D+1` pre-open report using `D-1` prices when trading day `D` has already closed
+
 If the user asks during trading hours, say that this skill is optimized for the post-close to pre-open window and adapt cautiously.
 
 Alternative operating window for `T+1 tail-entry mode`:

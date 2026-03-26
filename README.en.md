@@ -67,6 +67,7 @@ Best for:
 Characteristics:
 
 - uses the latest completed trading session as the main price anchor
+- if the local time is before `15:00` on trading day `D`, the anchor remains trading day `D-1`; if the local time is after `15:00` on trading day `D`, the anchor switches to trading day `D` close and the report becomes a `D+1` pre-open report
 - interprets setups against 5-day, 20-60 day, and 6-12 month history windows
 - defaults to `5` short-term, `5` medium-term, and `5` long-term names
 - remains the default workflow for standard pre-open analysis
