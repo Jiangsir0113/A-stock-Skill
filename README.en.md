@@ -68,6 +68,7 @@ Characteristics:
 
 - uses the latest completed trading session as the main price anchor
 - interprets setups against 5-day, 20-60 day, and 6-12 month history windows
+- defaults to `5` short-term, `5` medium-term, and `5` long-term names
 - remains the default workflow for standard pre-open analysis
 
 ### 2. T+1 tail-entry mode
@@ -90,11 +91,13 @@ Characteristics:
 
 ### Data and analysis
 
+- first prefilters roughly the top `200` valuable A-shares from Tonghuashun market ranking pages
 - Fetches A-share quotes and recent price history
 - Calculates MA, ATR, MACD clues, volume ratio, and related indicators
-- Pulls catalyst hints, lightweight news summaries, and supporting context
+- Pulls sector/industry context, news, announcements, policy clues, and supporting context
 - Scores and buckets candidates into short-, medium-, and long-term groups
 - Extracts intraday tail-session snapshots to measure post-`14:00` strength
+- Does not fabricate evidence when sector, policy, or news verification is missing
 
 ### Output behavior
 
@@ -107,7 +110,9 @@ Characteristics:
 
 ### Post-close / pre-open mode
 
+- `scripts/fetch_market_universe.py`
 - `scripts/fetch_quotes.py`
+- `scripts/fetch_ths_context.py`
 - `scripts/build_watchlist.py`
 - `scripts/fetch_catalysts.py`
 - `scripts/indicators.py`
@@ -117,8 +122,10 @@ Characteristics:
 
 ### T+1 tail-entry mode
 
+- `scripts/fetch_market_universe.py`
 - `scripts/fetch_intraday_snapshot.py`
 - `scripts/build_tail_watchlist.py`
+- `scripts/fetch_ths_context.py`
 - `scripts/render_t1_plan.py`
 - `scripts/run_t1_tail_trade.py`
 
@@ -135,7 +142,7 @@ cp -R a-share-stock-picker ~/.codex/skills/
 #### Post-close / pre-open mode
 
 ```text
-Use $a-share-stock-picker to build a pre-open A-share watchlist with 3 short-term, 3 medium-term, and 3 long-term names.
+Use $a-share-stock-picker to build a pre-open A-share watchlist with 5 short-term, 5 medium-term, and 5 long-term names.
 ```
 
 ```text
@@ -156,8 +163,9 @@ Use $a-share-stock-picker after 14:30 to re-evaluate the market and output a tai
 
 #### Post-close / pre-open mode
 
-- Fetch quotes and recent history first
-- Add catalyst, news, and disclosure context
+- Prefilter the market down to roughly the top 200 names first
+- Fetch quotes and recent history next
+- Add sector, news, policy, and disclosure context
 - Produce a watchlist or conditional trade plan last
 
 #### T+1 tail-entry mode
@@ -172,6 +180,7 @@ If exact entry, stop, or target levels are required, the underlying market data 
 ## Notes
 
 - Post-close / pre-open mode is best for the close-to-next-open window
+- The default pre-open output target is `5+5+5`
 - Tail mode is better for practical A-share `T+1` short-term trading
 - Avoid exact conclusions when intraday data has not been validated
 - Fall back to watchlist or conditional-plan language when evidence is not strong enough

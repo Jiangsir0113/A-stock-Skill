@@ -1,31 +1,8 @@
 #!/usr/bin/env python3
 import json
-import re
 import sys
-import urllib.request
-from urllib.error import URLError, HTTPError
 
-UA = "Mozilla/5.0 (OpenClaw Skill a-share-stock-picker)"
-TIMEOUT = 12
-
-
-def fetch(url):
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-        raw = resp.read()
-        for enc in ('utf-8', 'gb18030', 'gbk', 'latin1'):
-            try:
-                return raw.decode(enc)
-            except Exception:
-                pass
-        return raw.decode('utf-8', errors='ignore')
-
-
-def clean(text):
-    text = re.sub(r'<[^>]+>', ' ', text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    text = text.replace('同花顺财经','同花顺财经')
-    return text[:220]
+from ths_context import build_context
 
 
 def main():
@@ -34,19 +11,18 @@ def main():
         sys.exit(1)
     out = []
     for ticker in sys.argv[1:]:
-        ticker = ticker[-6:]
-        url = f'https://stockpage.10jqka.com.cn/{ticker}/'
-        item = {'ticker': ticker, 'summary': None, 'errors': []}
-        try:
-            txt = fetch(url)
-            m = re.search(r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']', txt, re.I)
-            if m:
-                item['summary'] = clean(m.group(1))
-            else:
-                item['summary'] = clean(txt)
-        except (URLError, HTTPError, TimeoutError, Exception) as e:
-            item['errors'].append(str(e))
-        out.append(item)
+        context = build_context(ticker)
+        out.append(
+            {
+                'ticker': context['ticker'],
+                'summary': context.get('summary'),
+                'highlights': context.get('sectionHighlights', [])[:6],
+                'pageCount': context.get('pageCount', 0),
+                'paginatedPageCount': context.get('paginatedPageCount', 0),
+                'usefulItemCount': context.get('usefulItemCount', 0),
+                'errors': context.get('errors', []),
+            }
+        )
     print(json.dumps(out, ensure_ascii=False, indent=2))
 
 

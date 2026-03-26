@@ -28,23 +28,27 @@ In this mode, the buy plan should be written for day `D` tail execution and the 
 
 For A-shares, collect price and market data in this order:
 
-1. Tonghuashun machine-readable K-line and time-series endpoints
-2. Tonghuashun stock, quote, concept, industry, and market pages
-3. Fallback public quote pages such as Eastmoney and Sina when Tonghuashun is unavailable
-4. Official exchange or company disclosures
-5. Official policy releases
-6. Reputable financial media for context
+1. Tonghuashun market-wide ranking pages for the first-pass universe when no tickers are provided
+2. Tonghuashun machine-readable K-line and time-series endpoints
+3. Tonghuashun stock, quote, concept, industry, and market pages
+4. Fallback public quote pages such as Eastmoney and Sina when Tonghuashun is unavailable
+5. Official exchange or company disclosures
+6. Official policy releases
+7. Reputable financial media for context
 
 Prefer the bundled script `scripts/fetch_quotes.py` to probe multiple sources quickly before composing the final answer.
 
 Primary Tonghuashun entry points:
 
+- `https://data.10jqka.com.cn/funds/ggzjl/field/<field>/order/desc/page/<page>/`
 - `https://d.10jqka.com.cn/v2/line/<market>_<ticker>/01/today.js`
 - `https://d.10jqka.com.cn/v2/line/<market>_<ticker>/01/last.js`
 - `https://d.10jqka.com.cn/v6/time/hs_<ticker>/defer/last.js`
 - `https://stockpage.10jqka.com.cn/<ticker>/`
 - `https://basic.10jqka.com.cn/<ticker>/`
 - `https://q.10jqka.com.cn/`
+- related Tonghuashun article, notice, report, doctor, search, and data pages reachable from the stock page
+- paginated Tonghuashun "更多" pages when they continue to return usable content
 
 Market code mapping:
 
@@ -58,7 +62,18 @@ Field mapping for the preferred machine-readable endpoints:
 - In `last.js`: each row is `date,open,high,low,close,volume,amount,turnover,...`
 - In `v6/time/.../defer/last.js`: `pre` = previous close, `date` = trading date, `data` = minute-by-minute sequence, useful for intraday path and late-session behavior
 
-Use `today.js` and `last.js` first whenever you need exact prices. Use page HTML mainly for reports, news, diagnosis text, and concept/industry context.
+Use `today.js` and `last.js` first whenever you need exact prices. Use Tonghuashun HTML and related pages for reports, news, diagnosis text, announcements, concept/industry context, and any stock-specific narrative that does not live in the machine-readable K-line endpoints.
+
+Do not treat a single stock page as the whole evidence set. If Tonghuashun exposes additional linked pages and paginated "更多" pages for the same ticker, keep collecting them until:
+
+- the page starts returning no new usable items
+- pagination reaches a reasonable cap for the current task
+- or the extra pages clearly stop adding decision-useful information
+
+Useful-information rule:
+
+- prefer fresh news and recent market-sensitive updates
+- stale news should not outweigh a new price move or a new official disclosure
 
 ## Required Data Pull
 

@@ -12,34 +12,50 @@ def run(cmd, outfile):
         subprocess.run(cmd, check=True, stdout=handle)
 
 
+def load_market_pool(path, detail_limit=200):
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    return [item["ticker"] for item in data.get("universe", [])[:detail_limit]]
+
+
+def final_tail_tickers(path, limit=5):
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    return [row["ticker"] for row in data.get("tail_entry", [])[:limit] if row.get("ticker")]
+
+
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: run_t1_tail_trade.py <ticker...>", file=sys.stderr)
-        sys.exit(1)
     tickers = [ticker[-6:] for ticker in sys.argv[1:]]
     work = Path.cwd()
+    market_pool = work / "market_universe.json"
     quotes = work / "tail_quotes.json"
     snapshot = work / "intraday_snapshot.json"
     watchlist = work / "tail_watchlist.json"
-    catalysts = work / "tail_catalysts.json"
-    news = work / "tail_news_summary.json"
+    context = work / "tail_ths_context.json"
     report = work / "t1_tail_plan.md"
 
-    run(["python3", str(BASE / "fetch_quotes.py"), *tickers], quotes)
+    if tickers:
+        analysis_tickers = tickers
+    else:
+        run(["python3", str(BASE / "fetch_market_universe.py"), "200"], market_pool)
+        analysis_tickers = load_market_pool(market_pool, detail_limit=200)
+        if not analysis_tickers:
+            raise SystemExit("No market universe candidates fetched")
+
+    run(["python3", str(BASE / "fetch_quotes.py"), *analysis_tickers], quotes)
     run(["python3", str(BASE / "fetch_intraday_snapshot.py"), str(quotes)], snapshot)
     run(["python3", str(BASE / "build_tail_watchlist.py"), str(quotes), str(snapshot)], watchlist)
-    run(["python3", str(BASE / "fetch_catalysts.py"), *tickers], catalysts)
-    run(["python3", str(BASE / "fetch_news_summary.py"), *tickers], news)
-    run(["python3", str(BASE / "render_t1_plan.py"), str(watchlist), str(catalysts), str(news)], report)
+    run(["python3", str(BASE / "fetch_ths_context.py"), *final_tail_tickers(watchlist, limit=5)], context)
+    run(["python3", str(BASE / "render_t1_plan.py"), str(watchlist), str(context), str(context)], report)
 
     print(
         json.dumps(
             {
+                "market_universe": str(market_pool) if not tickers else None,
                 "quotes": str(quotes),
                 "intraday_snapshot": str(snapshot),
                 "tail_watchlist": str(watchlist),
-                "catalysts": str(catalysts),
-                "news_summary": str(news),
+                "ths_context": str(context),
+                "catalysts": str(context),
+                "news_summary": str(context),
                 "report": str(report),
             },
             ensure_ascii=False,

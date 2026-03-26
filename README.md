@@ -68,6 +68,7 @@ a-share-stock-picker/a-share-stock-picker
 
 - 使用最近一个完整交易日作为主要价格锚点
 - 结合近 5 日、20-60 日、6-12 个月历史窗口判断结构
+- 默认输出短线、中线、长线各 `5` 只
 - 更适合大多数常规盘前分析请求
 
 ### 2. T+1 尾盘建仓模式
@@ -90,9 +91,13 @@ a-share-stock-picker/a-share-stock-picker
 
 ### 数据与分析
 
+- 先从同花顺全市场排行里预筛约 `200` 只高价值股票，再进入详细分析
 - 拉取 A 股行情与历史数据
 - 计算均线、ATR、MACD 线索和量比等技术指标
-- 获取个股催化、新闻摘要和上下文信息
+- 从同花顺多页面、多入口获取个股催化、公告、研报、新闻摘要和上下文信息
+- 对同花顺上下文做有用性排序，并优先保留新鲜新闻
+- 输出时不仅给股票，还要求结合板块/行业、新闻、政策和披露做分析
+- 无法验证的数据不补写、不捏造，缺失时会明确说明
 - 将候选按短线、中线、长线进行打分和分桶
 - 提取尾盘分时快照，识别 `14:00` 后回流和尾盘强度
 
@@ -107,7 +112,9 @@ a-share-stock-picker/a-share-stock-picker
 
 ### 盘后 / 盘前模式
 
+- `scripts/fetch_market_universe.py`
 - `scripts/fetch_quotes.py`
+- `scripts/fetch_ths_context.py`
 - `scripts/build_watchlist.py`
 - `scripts/fetch_catalysts.py`
 - `scripts/indicators.py`
@@ -117,8 +124,10 @@ a-share-stock-picker/a-share-stock-picker
 
 ### T+1 尾盘建仓模式
 
+- `scripts/fetch_market_universe.py`
 - `scripts/fetch_intraday_snapshot.py`
 - `scripts/build_tail_watchlist.py`
+- `scripts/fetch_ths_context.py`
 - `scripts/render_t1_plan.py`
 - `scripts/run_t1_tail_trade.py`
 
@@ -135,7 +144,7 @@ cp -R a-share-stock-picker ~/.codex/skills/
 #### 盘后 / 盘前模式
 
 ```text
-使用 $a-share-stock-picker 给我一份盘前 A 股观察池，短线、中线、长线各 3 只。
+使用 $a-share-stock-picker 给我一份盘前 A 股观察池，短线、中线、长线各 5 只。
 ```
 
 ```text
@@ -186,8 +195,9 @@ cp -R a-share-stock-picker ~/.codex/skills/
 
 #### 盘后 / 盘前模式
 
-- 先抓取行情和历史数据
-- 再结合催化、新闻和披露信息
+- 先做全市场前 `200` 只股票预筛
+- 再抓取行情和历史数据
+- 再结合板块/行业、新闻、政策和披露信息
 - 最后输出观察池或条件交易计划
 
 #### T+1 尾盘建仓模式
@@ -203,6 +213,7 @@ cp -R a-share-stock-picker ~/.codex/skills/
 ## 注意事项
 
 - 盘后 / 盘前模式最适合收盘后到次日开盘前
+- 默认盘前模式目标输出为 `5+5+5`
 - 尾盘模式更适合 A 股短线实盘 `T+1`
 - 不建议在盘中数据未校验时直接给出绝对化结论
 - 如果证据不足，应退回观察池或条件计划表达

@@ -3,6 +3,8 @@ import json
 import sys
 from pathlib import Path
 
+DEFAULT_BUCKET_COUNT = 5
+
 
 def to_float(v):
     try:
@@ -118,11 +120,14 @@ def build_row(item):
 
 def ensure_minimum_buckets(out, rows):
     for bucket in ('short', 'medium', 'long'):
-        if not out[bucket]:
-            sorted_rows = sorted(rows, key=lambda r: r['scores'][bucket], reverse=True)
-            for row in sorted_rows[:3]:
-                if row not in out[bucket]:
-                    out[bucket].append(row)
+        if len(out[bucket]) >= DEFAULT_BUCKET_COUNT:
+            continue
+        sorted_rows = sorted(rows, key=lambda r: r['scores'][bucket], reverse=True)
+        for row in sorted_rows:
+            if row not in out[bucket]:
+                out[bucket].append(row)
+            if len(out[bucket]) >= DEFAULT_BUCKET_COUNT:
+                break
 
 
 def main():
