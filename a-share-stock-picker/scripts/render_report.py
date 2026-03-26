@@ -128,6 +128,8 @@ def evidence_level(meta, cat, news, row):
         checks += 1
     if news.get('summary'):
         checks += 1
+    if isinstance(money_metrics(row).get('netInflow'), (int, float)):
+        checks += 1
     if policy_clues(cat, news) != '暂无自动抓取到可信政策线索':
         checks += 1
     if checks >= 5:
@@ -140,6 +142,42 @@ def evidence_level(meta, cat, news, row):
 def data_timestamp(row):
     anchor_date = row.get('anchorDate')
     return f'{anchor_date} 收盘锚点' if anchor_date else '待确认'
+
+
+def money_metrics(row):
+    return row.get('marketMetrics') or {}
+
+
+def money_net_text(row):
+    net = money_metrics(row).get('netInflow')
+    if not isinstance(net, (int, float)):
+        return '待确认'
+    sign = '+' if net > 0 else ''
+    if abs(net) >= 100000000:
+        return f'{sign}{net / 100000000:.2f}亿'
+    if abs(net) >= 10000:
+        return f'{sign}{net / 10000:.0f}万'
+    return f'{sign}{net:.0f}'
+
+
+def money_flow_view(row):
+    metrics = money_metrics(row)
+    net = metrics.get('netInflow')
+    amount = metrics.get('amount')
+    turnover = metrics.get('turnoverPct')
+    if not isinstance(net, (int, float)):
+        return '待确认'
+    verdict = '净流入' if net >= 0 else '净流出'
+    strength = '一般'
+    if abs(net) >= 500000000:
+        strength = '较强'
+    elif abs(net) >= 100000000:
+        strength = '偏强'
+    if isinstance(turnover, (int, float)) and turnover > 20:
+        strength += '/高换手'
+    elif isinstance(amount, (int, float)) and amount >= 3000000000:
+        strength += '/高成交'
+    return f'{verdict}{strength}'
 
 
 def rr(trigger, stop, t1):
@@ -178,7 +216,10 @@ def sell_time(bucket):
     return {'short':'冲高至第一目标减仓，跌破承接位离场','medium':'2-8 周内到目标位分批兑现','long':'季报/半年报后复核，分批处理'}[bucket]
 
 
-def no_buy(_row):
+def no_buy(row):
+    flow = money_flow_view(row)
+    if '净流出' in flow:
+        return '高开过多、放量不续强、主力资金继续净流出、数据失真时不买'
     return '高开过多、放量不续强、数据失真时不买'
 
 
@@ -216,11 +257,12 @@ def core_logic(row, bucket, meta, ind):
     sector = meta.get('sector', '待补充')
     vr = ind.get('vol_ratio')
     ma20 = ind.get('ma20')
+    flow = row.get('capitalFlowLabel') or money_flow_view(row)
     if bucket == 'short':
-        return f'{sector}方向活跃度较高，量比 {fmt(vr)}，看次日承接强弱'
+        return f'{sector}方向活跃度较高，主力资金状态 `{flow}`，量比 {fmt(vr)}，看次日承接强弱'
     if bucket == 'medium':
-        return f'{sector}方向 20 日结构更完整，MA20={fmt(ma20)}，适合回踩跟踪'
-    return f'{sector}方向更适合均衡型底仓，分批观察更稳妥'
+        return f'{sector}方向 20 日结构更完整，主力资金状态 `{flow}`，MA20={fmt(ma20)}，适合回踩跟踪'
+    return f'{sector}方向更适合均衡型底仓，主力资金状态 `{flow}`，分批观察更稳妥'
 
 
 def evidence_lines(row, meta, cat, ind, news):
@@ -234,9 +276,15 @@ def evidence_lines(row, meta, cat, ind, news):
     page_text = f"；同花顺抓取页数 `{page_count}`" if page_count else ''
     useful_text = f"；有效线索 `{useful_count}`" if useful_count else ''
     s = row.get('summary', {})
+    metrics = money_metrics(row)
+    amount = metrics.get('amount')
+    turnover = metrics.get('turnoverPct')
+    flow_in = metrics.get('flowIn')
+    flow_out = metrics.get('flowOut')
     return [
         f"- **{meta.get('name', row['ticker'])} {row['ticker']}**：行业 `{meta.get('sector', '待补充')}`；短/中/长评分 `{row['scores']['short']}/{row['scores']['medium']}/{row['scores']['long']}`。",
         f"  - 价格结构：近 1 日涨跌 `{fmt(s.get('chg_1d'))}%`，MA5/20/60 `{fmt(ind.get('ma5'))}/{fmt(ind.get('ma20'))}/{fmt(ind.get('ma60'))}`，ATR14 `{fmt(ind.get('atr14'))}`，量比 `{fmt(ind.get('vol_ratio'))}`。",
+        f"  - 资金面：净流入 `{money_net_text(row)}`，资金判断 `{money_flow_view(row)}`，流入/流出 `{fmt(flow_in)}/{fmt(flow_out)}`，成交额 `{fmt(amount)}`，换手 `{fmt(turnover)}%`。",
         f"  - 板块/行业：`{meta.get('sector', '待补充')}`，核心逻辑围绕该方向展开；若行业字段缺失，则只按已验证行情与新闻解读。",
         f"  - 新闻/公告：{title_text}",
         f"  - 政策/宏观：{policy_text}",
@@ -245,7 +293,7 @@ def evidence_lines(row, meta, cat, ind, news):
 
 
 def render_bucket(bucket, rows, names, catalysts, indicators, news):
-    out = [f"## {TITLE[bucket]}", "| 股票 | 优先级 | 上个交易日开盘价 | 上个交易日收盘价 | 形态类型 | 板块强度 | 消息日期 | 关键支撑 | 关键阻力 | 核心逻辑 | 买入时间 | 触发买价 | 止损价 | 第一目标 | 第二目标 | 风险收益比 | 仓位建议 | 证据级别 | 数据时间戳 | 卖出时间 | 持有周期 | 不买条件 |", "|---|---:|---:|---:|---|---|---|---:|---:|---|---|---|---:|---:|---:|---|---|---|---|---|---|---|"]
+    out = [f"## {TITLE[bucket]}", "| 股票 | 优先级 | 上个交易日开盘价 | 上个交易日收盘价 | 形态类型 | 板块强度 | 消息日期 | 资金净流入 | 资金面 | 关键支撑 | 关键阻力 | 核心逻辑 | 买入时间 | 触发买价 | 止损价 | 第一目标 | 第二目标 | 风险收益比 | 仓位建议 | 证据级别 | 数据时间戳 | 卖出时间 | 持有周期 | 不买条件 |", "|---|---:|---:|---:|---|---|---|---:|---|---:|---:|---|---|---|---:|---:|---:|---|---|---|---|---|---|---|"]
     for idx, row in enumerate(rows[:DEFAULT_BUCKET_COUNT], start=1):
         meta = names.get(row['ticker'], {})
         ind = indicators.get(row['ticker'], {})
@@ -253,7 +301,7 @@ def render_bucket(bucket, rows, names, catalysts, indicators, news):
         nw = news.get(row['ticker'], {})
         display = f"{meta.get('name', row['ticker'])} {row['ticker']}"
         support, resist, trigger, stop, t1, t2, ratio, _ = levels(row, bucket, ind)
-        out.append(f"| {display} | {idx} | {fmt(row.get('open'))} | {fmt(row.get('close'))} | {shape(row, bucket)} | {sector_strength(meta, row, ind, cat, nw)} | {recent_message_dates(cat, nw)} | {fmt(support)} | {fmt(resist)} | {core_logic(row, bucket, meta, ind)} | {buy_time(bucket)} | {trigger} | {fmt(stop)} | {fmt(t1)} | {fmt(t2)} | {ratio} | {position_suggestion(bucket, row)} | {evidence_level(meta, cat, nw, row)} | {data_timestamp(row)} | {sell_time(bucket)} | {hold(bucket)} | {no_buy(row)} |")
+        out.append(f"| {display} | {idx} | {fmt(row.get('open'))} | {fmt(row.get('close'))} | {shape(row, bucket)} | {sector_strength(meta, row, ind, cat, nw)} | {recent_message_dates(cat, nw)} | {money_net_text(row)} | {money_flow_view(row)} | {fmt(support)} | {fmt(resist)} | {core_logic(row, bucket, meta, ind)} | {buy_time(bucket)} | {trigger} | {fmt(stop)} | {fmt(t1)} | {fmt(t2)} | {ratio} | {position_suggestion(bucket, row)} | {evidence_level(meta, cat, nw, row)} | {data_timestamp(row)} | {sell_time(bucket)} | {hold(bucket)} | {no_buy(row)} |")
     out.append('')
     out.append(f"### {TITLE[bucket]}说明")
     for row in rows[:DEFAULT_BUCKET_COUNT]:

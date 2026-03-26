@@ -30,20 +30,38 @@ def fetch(url):
 
 def parse_today_js(text):
     m = re.search(r'"data":"([^"]+)"', text)
-    if not m:
+    if m:
+        fields = m.group(1).split(',')
+        if len(fields) >= 7:
+            return {
+                "date": fields[0],
+                "open": fields[1],
+                "high": fields[2],
+                "low": fields[3],
+                "close": fields[4],
+                "volume": fields[5] if len(fields) > 5 else None,
+                "amount": fields[6] if len(fields) > 6 else None,
+                "raw": fields,
+            }
+    payload_match = re.search(r'\(\{".+?":(\{.+\})\}\)', text)
+    if not payload_match:
         return None
-    fields = m.group(1).split(',')
-    if len(fields) < 12:
+    try:
+        payload = json.loads(payload_match.group(1))
+    except Exception:
         return None
     return {
-        "date": fields[0],
-        "open": fields[1],
-        "high": fields[2],
-        "low": fields[3],
-        "close": fields[4],
-        "volume": fields[5] if len(fields) > 5 else None,
-        "amount": fields[6] if len(fields) > 6 else None,
-        "raw": fields,
+        "date": payload.get("1"),
+        "open": payload.get("7"),
+        "high": payload.get("8"),
+        "low": payload.get("9"),
+        "close": payload.get("11"),
+        "volume": payload.get("13"),
+        "amount": payload.get("19"),
+        "turnover": payload.get("1968584"),
+        "dt": payload.get("dt"),
+        "name": payload.get("name"),
+        "raw": payload,
     }
 
 

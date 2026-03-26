@@ -42,7 +42,10 @@ def main():
 
     run(["python3", str(BASE / "fetch_quotes.py"), *analysis_tickers], quotes)
     run(["python3", str(BASE / "fetch_intraday_snapshot.py"), str(quotes)], snapshot)
-    run(["python3", str(BASE / "build_tail_watchlist.py"), str(quotes), str(snapshot)], watchlist)
+    build_cmd = ["python3", str(BASE / "build_tail_watchlist.py"), str(quotes), str(snapshot)]
+    if market_pool.exists():
+        build_cmd.append(str(market_pool))
+    run(build_cmd, watchlist)
     run(["python3", str(BASE / "fetch_ths_context.py"), *final_tail_tickers(watchlist, limit=5)], context)
     run(["python3", str(BASE / "render_t1_plan.py"), str(watchlist), str(context), str(context)], report)
 

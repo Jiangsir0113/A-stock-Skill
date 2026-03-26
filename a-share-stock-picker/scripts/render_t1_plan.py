@@ -112,6 +112,8 @@ def evidence_level(meta, cat, news, row):
         checks += 1
     if news.get("summary"):
         checks += 1
+    if isinstance(money_metrics(row).get("netInflow"), (int, float)):
+        checks += 1
     if policy_clues(cat, news) != "暂无自动抓取到可信政策线索":
         checks += 1
     if checks >= 5:
@@ -131,6 +133,42 @@ def data_timestamp(row):
     return "待确认"
 
 
+def money_metrics(row):
+    return row.get("marketMetrics") or {}
+
+
+def money_net_text(row):
+    net = money_metrics(row).get("netInflow")
+    if not isinstance(net, (int, float)):
+        return "待确认"
+    sign = "+" if net > 0 else ""
+    if abs(net) >= 100000000:
+        return f"{sign}{net / 100000000:.2f}亿"
+    if abs(net) >= 10000:
+        return f"{sign}{net / 10000:.0f}万"
+    return f"{sign}{net:.0f}"
+
+
+def money_flow_view(row):
+    metrics = money_metrics(row)
+    net = metrics.get("netInflow")
+    amount = metrics.get("amount")
+    turnover = metrics.get("turnoverPct")
+    if not isinstance(net, (int, float)):
+        return "待确认"
+    verdict = "净流入" if net >= 0 else "净流出"
+    strength = "一般"
+    if abs(net) >= 500000000:
+        strength = "较强"
+    elif abs(net) >= 100000000:
+        strength = "偏强"
+    if isinstance(turnover, (int, float)) and turnover > 20:
+        strength += "/高换手"
+    elif isinstance(amount, (int, float)) and amount >= 3000000000:
+        strength += "/高成交"
+    return f"{verdict}{strength}"
+
+
 def evidence_lines(row, meta, cat, news):
     titles = [clean_line(title) for title in cat.get("titles", []) if clean_line(title)]
     highlights = [clean_line(item) for item in (cat.get("sectionHighlights") or news.get("highlights") or []) if clean_line(item)]
@@ -141,10 +179,16 @@ def evidence_lines(row, meta, cat, news):
     useful_count = news.get("usefulItemCount") or cat.get("usefulItemCount")
     page_text = f"；同花顺抓取页数 `{page_count}`" if page_count else ""
     useful_text = f"；有效线索 `{useful_count}`" if useful_count else ""
+    metrics = money_metrics(row)
+    amount = metrics.get("amount")
+    turnover = metrics.get("turnoverPct")
+    flow_in = metrics.get("flowIn")
+    flow_out = metrics.get("flowOut")
     return [
         f"- **{meta.get('name', row['ticker'])} {row['ticker']}**：行业 `{meta.get('sector', '待补充')}`；尾盘评分 `{row.get('score')}`。",
         f"  - 入选原因：{reasons}",
         f"  - 价格结构：D日参考价 `{fmt(row.get('todayClose'))}`，14:00 后变化 `{fmt(row.get('changeFrom1400Pct'))}%`，尾盘量能占比 `{fmt((row.get('lateVolumeShare') or 0) * 100)}%`。",
+        f"  - 资金面：净流入 `{money_net_text(row)}`，资金判断 `{money_flow_view(row)}`，流入/流出 `{fmt(flow_in)}/{fmt(flow_out)}`，成交额 `{fmt(amount)}`，换手 `{fmt(turnover)}%`。",
         f"  - 板块/行业：`{meta.get('sector', '待补充')}`，若行业字段缺失，则只按已验证行情与新闻解读。",
         f"  - 新闻/公告：{'；'.join((titles + highlights)[:3]) if (titles or highlights) else '暂无额外页面线索'}",
         f"  - 政策/宏观：{policy_text}",
@@ -167,8 +211,8 @@ def main():
         "说明：本模式用于 D 日尾盘建仓、D+1 日卖出，适配 A 股 T+1 规则。",
         "",
         "## 今日尾盘建仓计划",
-        "| 股票 | 优先级 | D日开盘价 | D日参考价 | 形态类型 | 板块强度 | 消息日期 | 尾盘支撑 | 尾盘阻力 | 核心逻辑 | 建仓时间 | 建仓价格区间 | 隔夜止损线 | 次日止盈一 | 次日止盈二 | 风险收益比 | 仓位建议 | 证据级别 | 数据时间戳 | 次日卖出时间 | 预计持有 | 放弃条件 |",
-        "|---|---:|---:|---:|---|---|---|---:|---:|---|---|---|---:|---:|---:|---|---|---|---|---|---|---|",
+        "| 股票 | 优先级 | D日开盘价 | D日参考价 | 形态类型 | 板块强度 | 消息日期 | 资金净流入 | 资金面 | 尾盘支撑 | 尾盘阻力 | 核心逻辑 | 建仓时间 | 建仓价格区间 | 隔夜止损线 | 次日止盈一 | 次日止盈二 | 风险收益比 | 仓位建议 | 证据级别 | 数据时间戳 | 次日卖出时间 | 预计持有 | 放弃条件 |",
+        "|---|---:|---:|---:|---|---|---|---:|---|---:|---:|---|---|---|---:|---:|---:|---|---|---|---|---|---|---|",
     ]
 
     for idx, row in enumerate(rows, start=1):
@@ -178,7 +222,7 @@ def main():
         display = f"{meta.get('name', row['ticker'])} {row['ticker']}"
         entry_zone = f"{fmt(row.get('entryLow'))}-{fmt(row.get('entryHigh'))}"
         parts.append(
-            f"| {display} | {idx} | {fmt(row.get('todayOpen'))} | {fmt(row.get('todayClose'))} | {row.get('setupType')} | {sector_strength(meta, row)} | {recent_message_dates(cat, nw)} | {fmt(row.get('support'))} | {fmt(row.get('resistance'))} | {row.get('coreLogic')} | {row.get('buyWindow')} | {entry_zone} | {fmt(row.get('stop'))} | {fmt(row.get('target1'))} | {fmt(row.get('target2'))} | {row.get('riskReward')} | {position_suggestion(row)} | {evidence_level(meta, cat, nw, row)} | {data_timestamp(row)} | {row.get('sellWindow')} | {row.get('holdWindow')} | {row.get('skipCondition')} |"
+            f"| {display} | {idx} | {fmt(row.get('todayOpen'))} | {fmt(row.get('todayClose'))} | {row.get('setupType')} | {sector_strength(meta, row)} | {recent_message_dates(cat, nw)} | {money_net_text(row)} | {money_flow_view(row)} | {fmt(row.get('support'))} | {fmt(row.get('resistance'))} | {row.get('coreLogic')} | {row.get('buyWindow')} | {entry_zone} | {fmt(row.get('stop'))} | {fmt(row.get('target1'))} | {fmt(row.get('target2'))} | {row.get('riskReward')} | {position_suggestion(row)} | {evidence_level(meta, cat, nw, row)} | {data_timestamp(row)} | {row.get('sellWindow')} | {row.get('holdWindow')} | {row.get('skipCondition')} |"
         )
 
     parts.extend(

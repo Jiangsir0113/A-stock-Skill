@@ -6,6 +6,16 @@ from pathlib import Path
 DEFAULT_BUCKET_COUNT = 5
 
 
+def load_market_metrics(path):
+    if not path:
+        return {}
+    p = Path(path)
+    if not p.exists():
+        return {}
+    data = json.loads(p.read_text(encoding='utf-8'))
+    return {item['ticker']: item.get('metrics', {}) for item in data.get('universe', []) if item.get('ticker')}
+
+
 def to_float(v):
     try:
         return float(v)
@@ -17,6 +27,30 @@ def pct(a, b):
     if a in (None, 0) or b is None:
         return None
     return (b - a) / a * 100.0
+
+
+def capital_flow_ratio(metrics):
+    net_inflow = to_float(metrics.get('netInflow'))
+    amount = to_float(metrics.get('amount'))
+    if net_inflow is None or amount in (None, 0):
+        return None
+    return net_inflow / amount
+
+
+def capital_flow_label(metrics):
+    net_inflow = to_float(metrics.get('netInflow'))
+    ratio = capital_flow_ratio(metrics)
+    if net_inflow is None:
+        return '待确认'
+    if net_inflow >= 500_000_000 or (ratio is not None and ratio >= 0.08):
+        return '主力净流入较强'
+    if net_inflow >= 100_000_000 or (ratio is not None and ratio >= 0.03):
+        return '主力净流入为正'
+    if net_inflow <= -500_000_000 or (ratio is not None and ratio <= -0.08):
+        return '主力净流出较强'
+    if net_inflow < 0:
+        return '主力净流出'
+    return '主力资金中性'
 
 
 def summarize_rows(rows):
@@ -43,7 +77,7 @@ def summarize_rows(rows):
     }
 
 
-def score_bucket(summary, status):
+def score_bucket(summary, status, market_metrics=None):
     short = 40
     medium = 45
     long = 50
@@ -77,6 +111,53 @@ def score_bucket(summary, status):
         pos5 = (last_close - low_5) / (high_5 - low_5)
         if pos5 > 0.8:
             short += 10
+
+    metrics = market_metrics or {}
+    net_inflow = to_float(metrics.get('netInflow'))
+    amount = to_float(metrics.get('amount'))
+    turnover = to_float(metrics.get('turnoverPct'))
+    flow_ratio = capital_flow_ratio(metrics)
+    if amount is not None:
+        if amount >= 3_000_000_000:
+            short += 8
+            medium += 6
+        elif amount >= 1_000_000_000:
+            short += 4
+            medium += 3
+    if turnover is not None:
+        if 3 <= turnover <= 20:
+            short += 6
+            medium += 4
+        elif turnover > 25:
+            short += 2
+            medium -= 2
+    if net_inflow is not None:
+        if net_inflow >= 500_000_000:
+            short += 12
+            medium += 10
+            long += 5
+        elif net_inflow >= 100_000_000:
+            short += 8
+            medium += 6
+            long += 2
+        elif net_inflow < 0:
+            short -= 10
+            medium -= 7
+            long -= 3
+    if flow_ratio is not None:
+        if flow_ratio >= 0.10:
+            short += 8
+            medium += 6
+        elif flow_ratio >= 0.05:
+            short += 5
+            medium += 4
+        elif flow_ratio <= -0.10:
+            short -= 12
+            medium -= 8
+            long -= 4
+        elif flow_ratio <= -0.05:
+            short -= 7
+            medium -= 5
     return {
         'short': max(0, min(100, round(short))),
         'medium': max(0, min(100, round(medium))),
@@ -84,9 +165,12 @@ def score_bucket(summary, status):
     }
 
 
-def primary_horizon(scores, summary):
+def primary_horizon(scores, summary, market_metrics=None):
     chg = summary.get('chg_1d')
+    flow_label = capital_flow_label(market_metrics or {})
     if chg is not None and chg > 1.5 and scores['short'] >= scores['medium'] - 2:
+        if '净流出' in flow_label and scores['medium'] >= scores['short'] - 3:
+            return 'medium'
         return 'short'
     if scores['long'] >= scores['medium'] and scores['long'] >= scores['short']:
         return 'long'
@@ -95,14 +179,15 @@ def primary_horizon(scores, summary):
     return 'short'
 
 
-def build_row(item):
+def build_row(item, market_metrics_map=None):
     data = item.get('sources', {})
     last_rows = data.get('10jqka_last') or []
     anchor = data.get('10jqka_today') or {}
     status = 'verified' if last_rows or anchor else 'fallback-only'
     summary = summarize_rows(last_rows)
-    scores = score_bucket(summary, status)
-    primary = primary_horizon(scores, summary)
+    metrics = (market_metrics_map or {}).get(item.get('ticker'), {})
+    scores = score_bucket(summary, status, metrics)
+    primary = primary_horizon(scores, summary, metrics)
     row = {
         'ticker': item.get('ticker'),
         'market': item.get('market'),
@@ -113,6 +198,8 @@ def build_row(item):
         'scores': scores,
         'primaryHorizon': primary,
         'summary': summary,
+        'marketMetrics': metrics,
+        'capitalFlowLabel': capital_flow_label(metrics),
         'plan': '条件观察' if status != 'verified' else '可进一步细化',
     }
     return row
@@ -131,15 +218,17 @@ def ensure_minimum_buckets(out, rows):
 
 
 def main():
-    if len(sys.argv) != 2:
-        print('Usage: build_watchlist.py <quotes.json>', file=sys.stderr)
+    if len(sys.argv) not in (2, 3):
+        print('Usage: build_watchlist.py <quotes.json> [market_universe.json]', file=sys.stderr)
         sys.exit(1)
     data = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+    market_metrics_map = load_market_metrics(sys.argv[2]) if len(sys.argv) == 3 else {}
     out = {'short': [], 'medium': [], 'long': [], 'notes': []}
-    rows = [build_row(item) for item in data]
+    rows = [build_row(item, market_metrics_map) for item in data]
     for row in rows:
         out[row['primaryHorizon']].append(row)
-        out['notes'].append(f"{row['ticker']}: short={row['scores']['short']} medium={row['scores']['medium']} long={row['scores']['long']} status={row['status']}")
+        net_inflow = row.get('marketMetrics', {}).get('netInflow')
+        out['notes'].append(f"{row['ticker']}: short={row['scores']['short']} medium={row['scores']['medium']} long={row['scores']['long']} status={row['status']} netInflow={net_inflow}")
     ensure_minimum_buckets(out, rows)
     for key in ('short','medium','long'):
         out[key] = sorted(out[key], key=lambda r: r['scores'][key], reverse=True)

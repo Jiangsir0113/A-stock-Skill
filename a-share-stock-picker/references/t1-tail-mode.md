@@ -70,6 +70,8 @@ Recommended fields for the entry table:
 - `D日参考价`
 - `板块强度`
 - `消息日期`
+- `资金净流入`
+- `资金面`
 - `尾盘支撑`
 - `尾盘阻力`
 - `建仓时间`

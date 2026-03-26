@@ -112,6 +112,7 @@ Use them to retrieve:
 - Latest completed-session open
 - Recent highs and lows
 - Recent turnover,成交额, and volume behavior
+- Recent资金流入、资金流出、资金净流入 when available from Tonghuashun market ranking sources
 - Sector or concept strength
 - Recent relative performance
 - Same-day minute path when short-term execution depends on intraday behavior
@@ -148,6 +149,7 @@ For each candidate, collect evidence from three buckets:
 Every final pick should have at least:
 
 - One price/volume reason
+- One capital-flow reason when market-wide or per-stock fund-flow data is available
 - One policy/news/company-event reason
 - One structural reason such as industry position, earnings trend, or valuation support
 - One clear sector/industry interpretation
@@ -181,6 +183,11 @@ For short-term and `T+1` workflows without user-supplied tickers:
    -资金净流入
    -涨跌幅/活跃度
 5. only after that, fetch the deeper quote/history/context payloads for the selected universe
+6. carry the market-universe资金流向 metrics into the final scoring and report whenever they are available; do not stop at prefilter only
+7. treat 主力资金流向 as a real recommendation factor, not a display-only note:
+   - positive 主力净流入 can raise priority and tradability
+   - persistent 主力净流出 should lower priority or trigger a skip condition
+   - in T+1 mode, obvious 主力净流出 should directly weaken tail-entry willingness
 
 ### 4. Score by horizon
 

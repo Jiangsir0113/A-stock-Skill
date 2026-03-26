@@ -4,6 +4,16 @@ import sys
 from pathlib import Path
 
 
+def load_market_metrics(path):
+    if not path:
+        return {}
+    p = Path(path)
+    if not p.exists():
+        return {}
+    data = json.loads(p.read_text(encoding="utf-8"))
+    return {item["ticker"]: item.get("metrics", {}) for item in data.get("universe", []) if item.get("ticker")}
+
+
 def to_float(value):
     try:
         return float(value)
@@ -15,6 +25,30 @@ def pct(base, current):
     if base in (None, 0) or current is None:
         return None
     return (current - base) / base * 100.0
+
+
+def capital_flow_ratio(metrics):
+    net_inflow = to_float(metrics.get("netInflow"))
+    amount = to_float(metrics.get("amount"))
+    if net_inflow is None or amount in (None, 0):
+        return None
+    return net_inflow / amount
+
+
+def capital_flow_label(metrics):
+    net_inflow = to_float(metrics.get("netInflow"))
+    ratio = capital_flow_ratio(metrics)
+    if net_inflow is None:
+        return "待确认"
+    if net_inflow >= 500_000_000 or (ratio is not None and ratio >= 0.08):
+        return "主力净流入较强"
+    if net_inflow >= 100_000_000 or (ratio is not None and ratio >= 0.03):
+        return "主力净流入为正"
+    if net_inflow <= -500_000_000 or (ratio is not None and ratio <= -0.08):
+        return "主力净流出较强"
+    if net_inflow < 0:
+        return "主力净流出"
+    return "主力资金中性"
 
 
 def sma(values, n):
@@ -70,7 +104,7 @@ def summarize_rows(rows):
     }
 
 
-def score_candidate(summary, snapshot):
+def score_candidate(summary, snapshot, market_metrics=None):
     score = 35
     notes = []
 
@@ -154,6 +188,44 @@ def score_candidate(summary, snapshot):
             score -= 8
             notes.append("偏离近5日高点过多，尾盘追价性价比下降")
 
+    metrics = market_metrics or {}
+    net_inflow = to_float(metrics.get("netInflow"))
+    amount = to_float(metrics.get("amount"))
+    turnover = to_float(metrics.get("turnoverPct"))
+    flow_ratio = capital_flow_ratio(metrics)
+    if amount is not None:
+        if amount >= 3_000_000_000:
+            score += 6
+            notes.append("全市场资金成交额靠前")
+        elif amount >= 1_000_000_000:
+            score += 3
+    if turnover is not None:
+        if 3 <= turnover <= 20:
+            score += 4
+        elif turnover > 25:
+            score -= 2
+    if net_inflow is not None:
+        if net_inflow >= 500_000_000:
+            score += 14
+            notes.append("主力资金净流入较强，隔夜承接更有基础")
+        elif net_inflow >= 100_000_000:
+            score += 8
+            notes.append("主力资金净流入为正")
+        elif net_inflow < 0:
+            score -= 12
+            notes.append("主力资金净流出，隔夜承接要保守")
+    if flow_ratio is not None:
+        if flow_ratio >= 0.10:
+            score += 8
+            notes.append("主力净流入占成交额比例高")
+        elif flow_ratio >= 0.05:
+            score += 4
+        elif flow_ratio <= -0.10:
+            score -= 12
+            notes.append("主力净流出占成交额比例偏高")
+        elif flow_ratio <= -0.05:
+            score -= 7
+
     return max(0, min(100, round(score))), notes
 
 
@@ -218,11 +290,12 @@ def build_levels(summary, snapshot):
     }
 
 
-def build_row(item, snapshots):
+def build_row(item, snapshots, market_metrics_map=None):
     rows = item.get("sources", {}).get("10jqka_last") or []
     summary = summarize_rows(rows)
     snapshot = snapshots.get(item.get("ticker"), {})
-    score, notes = score_candidate(summary, snapshot)
+    metrics = (market_metrics_map or {}).get(item.get("ticker"), {})
+    score, notes = score_candidate(summary, snapshot, metrics)
     levels = build_levels(summary, snapshot)
 
     intraday_close = snapshot.get("intradayClose")
@@ -248,28 +321,31 @@ def build_row(item, snapshots):
         "buyWindow": "D日 14:50-14:57",
         "sellWindow": "D+1 9:30-10:30 优先处理，弱则更早",
         "holdWindow": "隔夜到次日 1 个交易日为主",
-        "coreLogic": "尾盘强于14:00后走势，适合T+1隔夜博弈" if snapshot.get("changeFrom1400Pct", -99) > 0 else "尾盘承接一般，仅适合严格条件低吸",
-        "skipCondition": "高开过多、尾盘回落、流动性骤降时放弃",
+        "coreLogic": "尾盘强于14:00后走势，且主力资金方向支持隔夜博弈" if snapshot.get("changeFrom1400Pct", -99) > 0 and "净流入" in capital_flow_label(metrics) else ("尾盘强于14:00后走势，适合T+1隔夜博弈" if snapshot.get("changeFrom1400Pct", -99) > 0 else "尾盘承接一般，仅适合严格条件低吸"),
+        "skipCondition": "高开过多、尾盘回落、流动性骤降或主力资金明显净流出时放弃",
         "nextDayPlan": "高开先止盈一部分，平开看第一目标，低开跌破止损线直接执行保护",
         "summary": summary,
+        "marketMetrics": metrics,
+        "capitalFlowLabel": capital_flow_label(metrics),
     }
     row.update(levels)
     return row
 
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: build_tail_watchlist.py <quotes.json> <intraday_snapshot.json>", file=sys.stderr)
+    if len(sys.argv) not in (3, 4):
+        print("Usage: build_tail_watchlist.py <quotes.json> <intraday_snapshot.json> [market_universe.json]", file=sys.stderr)
         sys.exit(1)
     quotes = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     snapshots = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+    market_metrics_map = load_market_metrics(sys.argv[3]) if len(sys.argv) == 4 else {}
     snapshot_map = {item["ticker"]: item for item in snapshots}
-    rows = [build_row(item, snapshot_map) for item in quotes]
+    rows = [build_row(item, snapshot_map, market_metrics_map) for item in quotes]
     rows = [row for row in rows if row.get("todayClose") is not None]
     rows.sort(key=lambda row: row["score"], reverse=True)
     out = {
         "tail_entry": rows[:8],
-        "notes": [f"{row['ticker']}: score={row['score']} latestMinute={row.get('latestMinute')}" for row in rows[:8]],
+        "notes": [f"{row['ticker']}: score={row['score']} latestMinute={row.get('latestMinute')} netInflow={row.get('marketMetrics', {}).get('netInflow')}" for row in rows[:8]],
     }
     print(json.dumps(out, ensure_ascii=False, indent=2))
 

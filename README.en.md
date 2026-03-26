@@ -95,6 +95,8 @@ Characteristics:
 - first prefilters roughly the top `200` valuable A-shares from Tonghuashun market ranking pages
 - Fetches A-share quotes and recent price history
 - Calculates MA, ATR, MACD clues, volume ratio, and related indicators
+- Carries capital-flow signals such as inflow, outflow, net inflow, turnover value, and turnover rate into the actual analysis instead of using them only for prefiltering
+- Uses major-capital flow as a real recommendation factor that can change ranking, core logic, and skip conditions instead of treating it as display-only commentary
 - Pulls sector/industry context, news, announcements, policy clues, and supporting context
 - Scores and buckets candidates into short-, medium-, and long-term groups
 - Extracts intraday tail-session snapshots to measure post-`14:00` strength

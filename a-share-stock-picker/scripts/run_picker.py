@@ -46,7 +46,10 @@ def main():
         if not analysis_tickers:
             raise SystemExit('No market universe candidates fetched')
     run(['python3', str(BASE / 'fetch_quotes.py'), *analysis_tickers], quotes)
-    run(['python3', str(BASE / 'build_watchlist.py'), str(quotes)], watchlist)
+    build_cmd = ['python3', str(BASE / 'build_watchlist.py'), str(quotes)]
+    if market_pool.exists():
+        build_cmd.append(str(market_pool))
+    run(build_cmd, watchlist)
     report_tickers = final_report_tickers(watchlist)
     run(['python3', str(BASE / 'fetch_ths_context.py'), *[t[-6:] for t in report_tickers]], context)
     run(['python3', str(BASE / 'indicators.py'), str(quotes)], indicators)
