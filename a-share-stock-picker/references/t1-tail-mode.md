@@ -65,8 +65,11 @@ Default output size for this mode:
 
 Recommended fields for the entry table:
 
+- `优先级`
 - `D日开盘价`
 - `D日参考价`
+- `板块强度`
+- `消息日期`
 - `尾盘支撑`
 - `尾盘阻力`
 - `建仓时间`
@@ -74,6 +77,9 @@ Recommended fields for the entry table:
 - `隔夜止损线`
 - `次日止盈一`
 - `次日止盈二`
+- `仓位建议`
+- `证据级别`
+- `数据时间戳`
 - `次日卖出时间`
 - `放弃条件`
 
