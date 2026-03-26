@@ -106,6 +106,7 @@ Characteristics:
 
 - Produces Chinese Markdown stock-picking reports
 - Supports structured table output
+- Uses a fixed standard-report template with fixed column order for both the default mode and the T+1 mode
 - Prefers conditional trading language
 - In tail mode, clearly separates the entry day from the sell day
 

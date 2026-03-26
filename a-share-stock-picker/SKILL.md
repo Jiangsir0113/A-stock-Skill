@@ -209,6 +209,14 @@ Default output:
 - 5 medium-term picks
 - 5 long-term picks
 
+Format-lock rule for the final answer:
+
+- when the user asks for the standard report, do not improvise a shorter summary layout
+- for the default post-close / pre-open mode, follow `references/output-template.md` exactly, including section structure and exact table column order
+- for the `T+1 tail-entry mode`, follow `references/t1-tail-mode.md` exactly, including the exact table column order for `今日尾盘建仓计划`
+- do not silently drop columns such as `资金净流入` or `资金面`
+- if evidence is missing, keep the column and write `待确认` instead of changing the format
+
 If you genuinely cannot support 5 high-quality names for a horizon, say that clearly and explain what evidence is missing. Do not pad with weak names just to fill the quota.
 
 Prefer "观察池 / 候选名单 / 条件计划" wording. When a direct buy recommendation would be too speculative, convert the answer into conditional language such as:
