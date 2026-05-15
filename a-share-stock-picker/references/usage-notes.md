@@ -56,6 +56,14 @@ Prefer this execution sequence:
 11. Or use `scripts/run_picker.py` as the one-shot wrapper
 12. Upgrade to exact price plans only after verifying freshness and structure
 
+Before final ranking, apply the selection-quality layer:
+
+- hard-exclude risk-warning/ST names, very poor liquidity, abnormal turnover heat, missing anchor-price names, and non-standard A-share pool markers
+- use `tradabilityScore` as a separate priority factor, especially for short-term and `T+1` plans
+- classify the market regime from the prefilter universe and lower chase willingness in weak or retreating regimes
+- use `A/B/C/D` evidence grades; `C` names should usually stay in observation language
+- apply sector concentration control so the final list is not accidentally one crowded trade
+
 For the default post-close / pre-open workflow, the target output size is `5` short-term names, `5` medium-term names, and `5` long-term names when enough qualified candidates are available.
 
 When Tonghuashun provides `更多` pages or related article/search pages, keep following them while the pages still return usable content. Do not stop at the first stock page if the later pages add notices, reports, sector news, or diagnosis context that may change the conclusion.
@@ -76,6 +84,7 @@ If the user wants a practical `T+1` short-term workflow:
 5. keep the final recommendation at `5` names
 6. render the result with `scripts/render_t1_plan.py`
 7. or use `scripts/run_t1_tail_trade.py` as the one-shot wrapper
+8. check `nextDayExitRisk` before promoting a candidate; high-risk names need smaller sizing, faster sell rules, or removal
 
 The same data-acquisition and analysis standards apply in both modes:
 
@@ -92,3 +101,7 @@ In this mode, prefer wording such as:
 - `D+1卖出计划`
 - `高开先兑现`
 - `低开跌破隔夜止损线则保护离场`
+
+## Review Preference
+
+After the next trading session, run `scripts/review_recommendations.py <watchlist.json> <next_quotes.json>` or the equivalent tail-watchlist review. Use the review data to tune scoring weights and remove setups that repeatedly trigger poor drawdown or weak close-return behavior.

@@ -3,6 +3,17 @@ import json
 import sys
 from pathlib import Path
 
+from stock_selection_quality import (
+    evidence_grade,
+    hard_exclusion,
+    next_day_exit_risk,
+    recommendation_role,
+    tradability_score,
+)
+
+BASE = Path(__file__).resolve().parent.parent
+NAMES_PATH = BASE / "references" / "ticker_names.json"
+
 
 def load_market_metrics(path):
     if not path:
@@ -12,6 +23,12 @@ def load_market_metrics(path):
         return {}
     data = json.loads(p.read_text(encoding="utf-8"))
     return {item["ticker"]: item.get("metrics", {}) for item in data.get("universe", []) if item.get("ticker")}
+
+
+def load_names():
+    if NAMES_PATH.exists():
+        return json.loads(NAMES_PATH.read_text(encoding="utf-8"))
+    return {}
 
 
 def to_float(value):
@@ -290,7 +307,7 @@ def build_levels(summary, snapshot):
     }
 
 
-def build_row(item, snapshots, market_metrics_map=None):
+def build_row(item, snapshots, market_metrics_map=None, names=None):
     rows = item.get("sources", {}).get("10jqka_last") or []
     summary = summarize_rows(rows)
     snapshot = snapshots.get(item.get("ticker"), {})
@@ -329,6 +346,24 @@ def build_row(item, snapshots, market_metrics_map=None):
         "capitalFlowLabel": capital_flow_label(metrics),
     }
     row.update(levels)
+    meta = (names or {}).get(item.get("ticker"), {})
+    quality = tradability_score(row, tail=True)
+    row["tradabilityScore"] = quality["score"]
+    row["tradabilityReasons"] = quality["reasons"]
+    exclusion = hard_exclusion(row, meta, mode="tail")
+    row["excluded"] = exclusion["excluded"]
+    row["exclusionReasons"] = exclusion["reasons"]
+    grade = evidence_grade(meta, {}, {}, row)
+    row["evidenceGrade"] = grade["grade"]
+    row["evidenceComponents"] = grade["components"]
+    risk = next_day_exit_risk(row)
+    row["nextDayExitRisk"] = risk["level"]
+    row["nextDayExitRiskReasons"] = risk["reasons"]
+    row["role"] = recommendation_role(row, "short", meta)
+    if row["excluded"]:
+        row["score"] = 0
+    else:
+        row["score"] = max(0, min(100, round(row["score"] + (row["tradabilityScore"] - 50) * 0.35)))
     return row
 
 
@@ -339,13 +374,16 @@ def main():
     quotes = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     snapshots = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
     market_metrics_map = load_market_metrics(sys.argv[3]) if len(sys.argv) == 4 else {}
+    names = load_names()
     snapshot_map = {item["ticker"]: item for item in snapshots}
-    rows = [build_row(item, snapshot_map, market_metrics_map) for item in quotes]
-    rows = [row for row in rows if row.get("todayClose") is not None]
+    rows = [build_row(item, snapshot_map, market_metrics_map, names) for item in quotes]
+    excluded = [{"ticker": row.get("ticker"), "reasons": row.get("exclusionReasons", [])} for row in rows if row.get("excluded")]
+    rows = [row for row in rows if row.get("todayClose") is not None and not row.get("excluded")]
     rows.sort(key=lambda row: row["score"], reverse=True)
     out = {
         "tail_entry": rows[:8],
-        "notes": [f"{row['ticker']}: score={row['score']} latestMinute={row.get('latestMinute')} netInflow={row.get('marketMetrics', {}).get('netInflow')}" for row in rows[:8]],
+        "excluded": excluded,
+        "notes": [f"{row['ticker']}: score={row['score']} tradability={row.get('tradabilityScore')} exitRisk={row.get('nextDayExitRisk')} latestMinute={row.get('latestMinute')} netInflow={row.get('marketMetrics', {}).get('netInflow')}" for row in rows[:8]],
     }
     print(json.dumps(out, ensure_ascii=False, indent=2))
 

@@ -4,6 +4,8 @@ import re
 import sys
 from pathlib import Path
 
+from stock_selection_quality import evidence_grade
+
 BASE = Path(__file__).resolve().parent.parent
 NAMES_PATH = BASE / "references" / "ticker_names.json"
 TAIL_ENTRY_COUNT = 5
@@ -103,6 +105,9 @@ def position_suggestion(row):
 
 
 def evidence_level(meta, cat, news, row):
+    dynamic = evidence_grade(meta, cat, news, row)
+    if dynamic.get("grade"):
+        return dynamic["grade"]
     checks = 0
     if meta.get("sector") and meta.get("sector") != "待补充":
         checks += 1
@@ -189,6 +194,7 @@ def evidence_lines(row, meta, cat, news):
         f"  - 入选原因：{reasons}",
         f"  - 价格结构：D日参考价 `{fmt(row.get('todayClose'))}`，14:00 后变化 `{fmt(row.get('changeFrom1400Pct'))}%`，尾盘量能占比 `{fmt((row.get('lateVolumeShare') or 0) * 100)}%`。",
         f"  - 资金面：净流入 `{money_net_text(row)}`，资金判断 `{money_flow_view(row)}`，流入/流出 `{fmt(flow_in)}/{fmt(flow_out)}`，成交额 `{fmt(amount)}`，换手 `{fmt(turnover)}%`。",
+        f"  - 可交易性与次日风险：可交易性 `{fmt(row.get('tradabilityScore'))}`；次日退出风险 `{row.get('nextDayExitRisk', '待确认')}`；风险原因 `{clean_line('、'.join(row.get('nextDayExitRiskReasons', [])) or '待确认')}`。",
         f"  - 板块/行业：`{meta.get('sector', '待补充')}`，若行业字段缺失，则只按已验证行情与新闻解读。",
         f"  - 新闻/公告：{'；'.join((titles + highlights)[:3]) if (titles or highlights) else '暂无额外页面线索'}",
         f"  - 政策/宏观：{policy_text}",
@@ -222,7 +228,7 @@ def main():
         display = f"{meta.get('name', row['ticker'])} {row['ticker']}"
         entry_zone = f"{fmt(row.get('entryLow'))}-{fmt(row.get('entryHigh'))}"
         parts.append(
-            f"| {display} | {idx} | {fmt(row.get('todayOpen'))} | {fmt(row.get('todayClose'))} | {row.get('setupType')} | {sector_strength(meta, row)} | {recent_message_dates(cat, nw)} | {money_net_text(row)} | {money_flow_view(row)} | {fmt(row.get('support'))} | {fmt(row.get('resistance'))} | {row.get('coreLogic')} | {row.get('buyWindow')} | {entry_zone} | {fmt(row.get('stop'))} | {fmt(row.get('target1'))} | {fmt(row.get('target2'))} | {row.get('riskReward')} | {position_suggestion(row)} | {evidence_level(meta, cat, nw, row)} | {data_timestamp(row)} | {row.get('sellWindow')} | {row.get('holdWindow')} | {row.get('skipCondition')} |"
+            f"| {display} | {idx} | {fmt(row.get('todayOpen'))} | {fmt(row.get('todayClose'))} | {row.get('setupType')} | {sector_strength(meta, row)} | {recent_message_dates(cat, nw)} | {money_net_text(row)} | {money_flow_view(row)} | {fmt(row.get('support'))} | {fmt(row.get('resistance'))} | {row.get('coreLogic')}；次日风险{row.get('nextDayExitRisk', '待确认')} | {row.get('buyWindow')} | {entry_zone} | {fmt(row.get('stop'))} | {fmt(row.get('target1'))} | {fmt(row.get('target2'))} | {row.get('riskReward')} | {position_suggestion(row)} | {evidence_level(meta, cat, nw, row)} | {data_timestamp(row)} | {row.get('sellWindow')} | {row.get('holdWindow')} | {row.get('skipCondition')} |"
         )
 
     parts.extend(
@@ -234,7 +240,7 @@ def main():
     for row in rows:
         meta = names.get(row["ticker"], {})
         parts.append(
-            f"- `{meta.get('name', row['ticker'])} {row['ticker']}`：{row.get('nextDayPlan')} 若次日竞价明显高于 `第一目标`，优先兑现一部分；若低开并跌破 `隔夜止损线`，不恋战。"
+            f"- `{meta.get('name', row['ticker'])} {row['ticker']}`：次日退出风险 `{row.get('nextDayExitRisk', '待确认')}`。{row.get('nextDayPlan')} 若次日竞价明显高于 `第一目标`，优先兑现一部分；若低开并跌破 `隔夜止损线`，不恋战。"
         )
 
     parts.extend(["", "## 入选说明"])

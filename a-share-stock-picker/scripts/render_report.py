@@ -4,6 +4,8 @@ import re
 import sys
 from pathlib import Path
 
+from stock_selection_quality import evidence_grade
+
 TITLE = {'short': '短线标的', 'medium': '中线标的', 'long': '长线标的'}
 BASE = Path(__file__).resolve().parent.parent
 NAMES_PATH = BASE / 'references' / 'ticker_names.json'
@@ -119,6 +121,9 @@ def position_suggestion(bucket, row):
 
 
 def evidence_level(meta, cat, news, row):
+    dynamic = evidence_grade(meta, cat, news, row)
+    if dynamic.get('grade'):
+        return dynamic['grade']
     checks = 0
     if meta.get('sector') and meta.get('sector') != '待补充':
         checks += 1
@@ -258,11 +263,14 @@ def core_logic(row, bucket, meta, ind):
     vr = ind.get('vol_ratio')
     ma20 = ind.get('ma20')
     flow = row.get('capitalFlowLabel') or money_flow_view(row)
+    role = row.get('role') or '条件观察'
+    tradability = row.get('tradabilityScore')
+    tradability_text = f'，可交易性 {tradability}' if tradability is not None else ''
     if bucket == 'short':
-        return f'{sector}方向活跃度较高，主力资金状态 `{flow}`，量比 {fmt(vr)}，看次日承接强弱'
+        return f'{role}，主力资金 `{flow}`，量比 {fmt(vr)}{tradability_text}，看次日承接强弱'
     if bucket == 'medium':
-        return f'{sector}方向 20 日结构更完整，主力资金状态 `{flow}`，MA20={fmt(ma20)}，适合回踩跟踪'
-    return f'{sector}方向更适合均衡型底仓，主力资金状态 `{flow}`，分批观察更稳妥'
+        return f'{role}，20 日结构更完整，主力资金 `{flow}`，MA20={fmt(ma20)}{tradability_text}'
+    return f'{role}，主力资金 `{flow}`，分批观察更稳妥{tradability_text}'
 
 
 def evidence_lines(row, meta, cat, ind, news):
@@ -285,6 +293,7 @@ def evidence_lines(row, meta, cat, ind, news):
         f"- **{meta.get('name', row['ticker'])} {row['ticker']}**：行业 `{meta.get('sector', '待补充')}`；短/中/长评分 `{row['scores']['short']}/{row['scores']['medium']}/{row['scores']['long']}`。",
         f"  - 价格结构：近 1 日涨跌 `{fmt(s.get('chg_1d'))}%`，MA5/20/60 `{fmt(ind.get('ma5'))}/{fmt(ind.get('ma20'))}/{fmt(ind.get('ma60'))}`，ATR14 `{fmt(ind.get('atr14'))}`，量比 `{fmt(ind.get('vol_ratio'))}`。",
         f"  - 资金面：净流入 `{money_net_text(row)}`，资金判断 `{money_flow_view(row)}`，流入/流出 `{fmt(flow_in)}/{fmt(flow_out)}`，成交额 `{fmt(amount)}`，换手 `{fmt(turnover)}%`。",
+        f"  - 可交易性：评分 `{fmt(row.get('tradabilityScore'))}`；理由 `{clean_line('、'.join(row.get('tradabilityReasons', [])) or '待确认')}`；角色 `{clean_line(row.get('role') or '条件观察')}`。",
         f"  - 板块/行业：`{meta.get('sector', '待补充')}`，核心逻辑围绕该方向展开；若行业字段缺失，则只按已验证行情与新闻解读。",
         f"  - 新闻/公告：{title_text}",
         f"  - 政策/宏观：{policy_text}",
@@ -323,13 +332,19 @@ def main():
     catalysts = load_json_map(sys.argv[2]) if len(sys.argv) >= 3 else {}
     indicators = load_json_map(sys.argv[3]) if len(sys.argv) >= 4 else {}
     news = load_json_map(sys.argv[4]) if len(sys.argv) >= 5 else {}
-    parts = ['# A股盘前选股战报', '说明：以下内容为盘前观察池 / 条件交易计划，不构成无条件买入建议。', '']
+    regime = data.get('marketRegime') or {}
+    regime_line = f"市场状态：{regime.get('label', '状态待确认')}；上涨占比 {fmt(regime.get('positiveRatio'))}；资金净流入合计 {fmt(regime.get('netInflowSum'))}。"
+    parts = ['# A股盘前选股战报', '说明：以下内容为盘前观察池 / 条件交易计划，不构成无条件买入建议。', regime_line, '']
     for bucket in ('short','medium','long'):
         parts.append(render_bucket(bucket, data.get(bucket, []), names, catalysts, indicators, news))
     if data.get('notes'):
         parts.append('## 补充备注')
         for n in data['notes']:
             parts.append(f'- {n}')
+    if data.get('excluded'):
+        parts.append('## 硬性剔除记录')
+        for item in data['excluded'][:30]:
+            parts.append(f"- `{item.get('ticker')}`：{'、'.join(item.get('reasons') or [])}")
     print('\n'.join(parts))
 
 

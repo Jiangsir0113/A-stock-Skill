@@ -32,6 +32,8 @@ Use bundled scripts when possible:
 - `scripts/fetch_news_summary.py <ticker...>`: derive a compact summary from the broader Tonghuashun multi-page context payload
 - `scripts/render_report.py <watchlist.json> [catalysts.json] [indicators.json] [news_summary.json]`: render a Chinese markdown watchlist report with names, sectors, indicators, and conditional trade-plan wording
 - `scripts/run_picker.py <ticker...>`: one-shot entry point that fetches quotes, scores candidates, pulls catalyst clues, computes indicators, and writes the final report
+- `scripts/stock_selection_quality.py`: shared selection-quality helpers for hard exclusions, tradability score, evidence grade, market-regime classification, portfolio concentration control, and `T+1` next-day exit risk
+- `scripts/review_recommendations.py <watchlist.json> <next_quotes.json>`: review prior recommendations against the next session's OHLC to record trigger, target, stop, drawdown, and close-return outcomes
 - `scripts/fetch_intraday_snapshot.py <quotes.json>`: turn minute-level Tonghuashun data into a tail-session snapshot for day `D`
 - `scripts/build_tail_watchlist.py <quotes.json> <intraday_snapshot.json>`: score candidates for `T+1` tail entry quality
 - `scripts/render_t1_plan.py <tail_watchlist.json> [catalysts.json] [news_summary.json]`: render a `D日尾盘建仓 / D+1卖出` markdown plan
@@ -189,6 +191,25 @@ For short-term and `T+1` workflows without user-supplied tickers:
    - persistent 主力净流出 should lower priority or trigger a skip condition
    - in T+1 mode, obvious 主力净流出 should directly weaken tail-entry willingness
 
+### 3B. Apply selection-quality controls before final ranking
+
+Before producing final recommendations, apply the shared selection-quality layer:
+
+1. hard-exclude candidates with risk-warning/ST labels, very poor liquidity, abnormal turnover heat, missing anchor prices, or non-standard A-share pool markers
+2. calculate `tradabilityScore` separately from price strength; a strong stock with weak tradability should not receive top priority
+3. classify the broad market regime from the prefilter universe as `强势偏多`, `震荡偏强`, `震荡均衡`, `震荡偏弱`, `退潮防守`, or `状态待确认`
+4. adjust short-, medium-, and long-term scores based on the market regime:
+   - strong regimes can support more short-term breakout candidates
+   - weak or retreating regimes should lower short-term chase willingness and favor defensive or staged-entry language
+5. assign an evidence grade:
+   - `A`: price anchor, history, capital flow, sector, context/news, and tradability mostly verified
+   - `B`: enough verified evidence for a candidate, but one or two evidence buckets are incomplete
+   - `C`: usable only as a conditional observation
+   - `D`: insufficient for recommendation
+6. label each candidate's role, such as sector strength, trend tracking, allocation watch, or conditional observation
+7. apply portfolio concentration control so the final list is not dominated by one sector or one trade
+8. keep a hard-exclusion record in machine output; do not silently hide why a candidate was removed
+
 ### 4. Score by horizon
 
 Use the horizon-specific framework in the references:
@@ -240,6 +261,7 @@ In that mode:
    - `D+1卖出计划`
 6. make sure the buy instructions are for day `D` and the sell instructions are for day `D+1`
 7. if the tail trigger weakens before the close, cancel the entry instead of forcing a trade
+8. assign `nextDayExitRisk` for every tail-entry candidate; high-risk names require more conservative sell wording or should be downgraded
 
 Recommended prompt templates for this mode:
 
@@ -261,6 +283,9 @@ Wording rule:
 - Do not invent exact buy, stop, or target levels from stale or conflicting data.
 - Do not invent sector, policy, macro, or news rationales that were not verified from fetched sources.
 - Do not force all 9 names if the evidence quality is weak.
+- Do not promote hard-excluded names or low-tradability names just because their recent price move is strong.
+- Do not let one sector dominate the full recommendation list unless the user explicitly asks for a concentrated theme list.
+- Treat `A/B/C/D` evidence grades as recommendation confidence, not as guaranteed return levels.
 - Prefer large, liquid, information-rich names when the user asks for a balanced style.
 - If the market regime is unclear, say so and bias toward watchlist language and risk controls.
 
@@ -323,3 +348,15 @@ Load:
 - `references/output-template.md` for the final answer format
 - `references/usage-notes.md` for watchlist-first phrasing and balanced-style response shaping
 - `references/t1-tail-mode.md` for the dedicated `T+1` tail-entry workflow
+
+## Review Loop
+
+After a recommendation has a next-session result, use `scripts/review_recommendations.py` with the original `watchlist.json` or `tail_watchlist.json` plus the next-session quote payload. Record:
+
+- whether the trigger price was reachable
+- whether first target or stop was touched
+- maximum favorable move
+- maximum adverse move
+- close-to-trigger return
+
+Use this review output to tune weights and remove patterns that look good in reports but fail in execution.

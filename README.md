@@ -103,6 +103,8 @@ a-share-stock-picker/a-share-stock-picker
 - 无法验证的数据不补写、不捏造，缺失时会明确说明
 - 将候选按短线、中线、长线进行打分和分桶
 - 提取尾盘分时快照，识别 `14:00` 后回流和尾盘强度
+- 新增硬性剔除、可交易性评分、市场状态识别、证据等级和组合集中度控制
+- 支持推荐后复盘，统计触发、止盈、止损、最大浮盈、最大回撤和收盘收益
 
 ### 输出与表达
 
@@ -111,6 +113,7 @@ a-share-stock-picker/a-share-stock-picker
 - 标准报告使用固定模板和固定列顺序，默认盘前模式与 T+1 模式都不应随意变形
 - 优先使用条件触发式交易语言
 - 在尾盘模式下，明确拆分建仓日和卖出日
+- 在尾盘模式下，补充 `次日退出风险`，避免只看尾盘强度、不看 D+1 卖出压力
 
 ## 主要脚本
 
@@ -125,6 +128,8 @@ a-share-stock-picker/a-share-stock-picker
 - `scripts/fetch_news_summary.py`
 - `scripts/render_report.py`
 - `scripts/run_picker.py`
+- `scripts/stock_selection_quality.py`
+- `scripts/review_recommendations.py`
 
 ### T+1 尾盘建仓模式
 
@@ -134,6 +139,7 @@ a-share-stock-picker/a-share-stock-picker
 - `scripts/fetch_ths_context.py`
 - `scripts/render_t1_plan.py`
 - `scripts/run_t1_tail_trade.py`
+- `scripts/stock_selection_quality.py`
 
 ## 使用方式
 
@@ -203,6 +209,7 @@ cp -R a-share-stock-picker ~/.codex/skills/
 - 再抓取行情和历史数据
 - 再结合板块/行业、新闻、政策和披露信息
 - 最后输出观察池或条件交易计划
+- 推荐后用下一交易日行情做复盘，持续校准打分权重
 
 #### T+1 尾盘建仓模式
 
@@ -211,8 +218,24 @@ cp -R a-share-stock-picker ~/.codex/skills/
 - `14:45-14:57` 输出最终建仓计划
 - `D+1 09:20-09:30` 复核竞价和开盘前信息，输出今日卖出计划
 - `D+1 09:30-10:30` 根据计划执行卖出
+- 对每只尾盘候选标出次日退出风险，高风险候选应降低优先级或缩小仓位
 
 如果要给出精确买点、止损和目标位，应确保底层价格数据是最新且已验证的。
+
+### 推荐后复盘
+
+```bash
+python a-share-stock-picker/scripts/review_recommendations.py watchlist.json next_quotes.json
+```
+
+复盘输出会记录：
+
+- 买点是否触发
+- 是否触及第一目标
+- 是否触及止损
+- 最大浮盈
+- 最大回撤
+- 收盘相对触发价收益
 
 ## 注意事项
 

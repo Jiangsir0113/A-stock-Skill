@@ -3,7 +3,19 @@ import json
 import sys
 from pathlib import Path
 
+from stock_selection_quality import (
+    apply_portfolio_constraints,
+    evidence_grade,
+    hard_exclusion,
+    market_regime_from_universe,
+    recommendation_role,
+    regime_score_adjustment,
+    tradability_score,
+)
+
 DEFAULT_BUCKET_COUNT = 5
+BASE = Path(__file__).resolve().parent.parent
+NAMES_PATH = BASE / 'references' / 'ticker_names.json'
 
 
 def load_market_metrics(path):
@@ -14,6 +26,21 @@ def load_market_metrics(path):
         return {}
     data = json.loads(p.read_text(encoding='utf-8'))
     return {item['ticker']: item.get('metrics', {}) for item in data.get('universe', []) if item.get('ticker')}
+
+
+def load_market_universe(path):
+    if not path:
+        return {}
+    p = Path(path)
+    if not p.exists():
+        return {}
+    return json.loads(p.read_text(encoding='utf-8'))
+
+
+def load_names():
+    if NAMES_PATH.exists():
+        return json.loads(NAMES_PATH.read_text(encoding='utf-8'))
+    return {}
 
 
 def to_float(v):
@@ -179,7 +206,7 @@ def primary_horizon(scores, summary, market_metrics=None):
     return 'short'
 
 
-def build_row(item, market_metrics_map=None):
+def build_row(item, market_metrics_map=None, names=None, market_regime=None):
     data = item.get('sources', {})
     last_rows = data.get('10jqka_last') or []
     anchor = data.get('10jqka_today') or {}
@@ -187,7 +214,11 @@ def build_row(item, market_metrics_map=None):
     summary = summarize_rows(last_rows)
     metrics = (market_metrics_map or {}).get(item.get('ticker'), {})
     scores = score_bucket(summary, status, metrics)
+    regime_label = (market_regime or {}).get('label')
+    for bucket in ('short', 'medium', 'long'):
+        scores[bucket] = max(0, min(100, scores[bucket] + regime_score_adjustment(regime_label, bucket)))
     primary = primary_horizon(scores, summary, metrics)
+    meta = (names or {}).get(item.get('ticker'), {})
     row = {
         'ticker': item.get('ticker'),
         'market': item.get('market'),
@@ -202,6 +233,21 @@ def build_row(item, market_metrics_map=None):
         'capitalFlowLabel': capital_flow_label(metrics),
         'plan': '条件观察' if status != 'verified' else '可进一步细化',
     }
+    quality = tradability_score(row)
+    row['tradabilityScore'] = quality['score']
+    row['tradabilityReasons'] = quality['reasons']
+    exclusion = hard_exclusion(row, meta)
+    row['excluded'] = exclusion['excluded']
+    row['exclusionReasons'] = exclusion['reasons']
+    grade = evidence_grade(meta, {}, {}, row)
+    row['evidenceGrade'] = grade['grade']
+    row['evidenceComponents'] = grade['components']
+    row['role'] = recommendation_role(row, primary, meta)
+    for bucket in ('short', 'medium', 'long'):
+        if row['excluded']:
+            scores[bucket] = 0
+        else:
+            scores[bucket] = max(0, min(100, round(scores[bucket] + (row['tradabilityScore'] - 50) * (0.30 if bucket == 'short' else 0.18))))
     return row
 
 
@@ -217,21 +263,40 @@ def ensure_minimum_buckets(out, rows):
                 break
 
 
+def select_bucket(rows, bucket, names, used):
+    candidates = sorted(
+        [row for row in rows if not row.get('excluded')],
+        key=lambda r: (r['scores'][bucket], r.get('tradabilityScore', 0)),
+        reverse=True,
+    )
+    fresh = [row for row in candidates if row.get('ticker') not in used]
+    selected = apply_portfolio_constraints(fresh, bucket, names, limit=DEFAULT_BUCKET_COUNT, max_per_sector=2)
+    return selected[:DEFAULT_BUCKET_COUNT]
+
+
 def main():
     if len(sys.argv) not in (2, 3):
         print('Usage: build_watchlist.py <quotes.json> [market_universe.json]', file=sys.stderr)
         sys.exit(1)
     data = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+    market_universe = load_market_universe(sys.argv[2]) if len(sys.argv) == 3 else {}
     market_metrics_map = load_market_metrics(sys.argv[2]) if len(sys.argv) == 3 else {}
-    out = {'short': [], 'medium': [], 'long': [], 'notes': []}
-    rows = [build_row(item, market_metrics_map) for item in data]
+    market_regime = market_regime_from_universe(market_universe)
+    names = load_names()
+    out = {'short': [], 'medium': [], 'long': [], 'notes': [], 'excluded': [], 'marketRegime': market_regime}
+    rows = [build_row(item, market_metrics_map, names, market_regime) for item in data]
     for row in rows:
+        if row.get('excluded'):
+            out['excluded'].append({'ticker': row.get('ticker'), 'reasons': row.get('exclusionReasons', [])})
+            continue
         out[row['primaryHorizon']].append(row)
         net_inflow = row.get('marketMetrics', {}).get('netInflow')
-        out['notes'].append(f"{row['ticker']}: short={row['scores']['short']} medium={row['scores']['medium']} long={row['scores']['long']} status={row['status']} netInflow={net_inflow}")
+        out['notes'].append(f"{row['ticker']}: short={row['scores']['short']} medium={row['scores']['medium']} long={row['scores']['long']} tradability={row.get('tradabilityScore')} grade={row.get('evidenceGrade')} status={row['status']} netInflow={net_inflow}")
     ensure_minimum_buckets(out, rows)
+    used = set()
     for key in ('short','medium','long'):
-        out[key] = sorted(out[key], key=lambda r: r['scores'][key], reverse=True)
+        out[key] = select_bucket(rows, key, names, used)
+        used.update(row.get('ticker') for row in out[key])
     print(json.dumps(out, ensure_ascii=False, indent=2))
 
 

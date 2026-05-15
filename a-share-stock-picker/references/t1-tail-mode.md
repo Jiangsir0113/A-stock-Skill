@@ -29,6 +29,7 @@ For each final candidate, use:
 - change from `14:00`
 - late-session volume share
 - liquidity filters such as recent成交额
+- `nextDayExitRisk`, based on same-day extension, late-session fade, intraday close location, and capital-flow direction
 
 Do not rely on a same-day move alone. Tail-entry decisions must still be read against the recent `5-20` day structure.
 
@@ -49,6 +50,7 @@ Avoid names that show:
 - weak late-session follow-through
 - thin liquidity
 - isolated rumor-driven spikes without sector support
+- high `nextDayExitRisk` unless the sell plan is explicitly defensive and the position size is small
 
 ## Output Shape
 
@@ -62,6 +64,8 @@ The important shift is that buy and sell instructions are no longer written as i
 Default output size for this mode:
 
 - `5` tail-entry candidates per run when enough qualified names are available
+
+Every final row should carry a next-day exit-risk judgment. If the risk is `高`, either downgrade priority, shrink position sizing, or remove the name when there are better alternatives.
 
 The `今日尾盘建仓计划` table must use this exact column order:
 

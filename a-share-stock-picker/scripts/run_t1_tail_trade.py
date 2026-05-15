@@ -35,19 +35,19 @@ def main():
     if tickers:
         analysis_tickers = tickers
     else:
-        run(["python3", str(BASE / "fetch_market_universe.py"), "200"], market_pool)
+        run([sys.executable, str(BASE / "fetch_market_universe.py"), "200"], market_pool)
         analysis_tickers = load_market_pool(market_pool, detail_limit=200)
         if not analysis_tickers:
             raise SystemExit("No market universe candidates fetched")
 
-    run(["python3", str(BASE / "fetch_quotes.py"), *analysis_tickers], quotes)
-    run(["python3", str(BASE / "fetch_intraday_snapshot.py"), str(quotes)], snapshot)
-    build_cmd = ["python3", str(BASE / "build_tail_watchlist.py"), str(quotes), str(snapshot)]
+    run([sys.executable, str(BASE / "fetch_quotes.py"), *analysis_tickers], quotes)
+    run([sys.executable, str(BASE / "fetch_intraday_snapshot.py"), str(quotes)], snapshot)
+    build_cmd = [sys.executable, str(BASE / "build_tail_watchlist.py"), str(quotes), str(snapshot)]
     if market_pool.exists():
         build_cmd.append(str(market_pool))
     run(build_cmd, watchlist)
-    run(["python3", str(BASE / "fetch_ths_context.py"), *final_tail_tickers(watchlist, limit=5)], context)
-    run(["python3", str(BASE / "render_t1_plan.py"), str(watchlist), str(context), str(context)], report)
+    run([sys.executable, str(BASE / "fetch_ths_context.py"), *final_tail_tickers(watchlist, limit=5)], context)
+    run([sys.executable, str(BASE / "render_t1_plan.py"), str(watchlist), str(context), str(context)], report)
 
     print(
         json.dumps(

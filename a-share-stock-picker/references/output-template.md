@@ -45,6 +45,7 @@ Use this Markdown table skeleton:
 - `风险收益比`: a compact risk/reward summary such as `1:2.1`
 - `仓位建议`: position sizing such as `观察仓` `轻仓` `分批半仓`
 - `证据级别`: `高` `中` `低`
+- the current scripts may also use `A` `B` `C` `D` evidence grades, where `A` is the strongest verified evidence bundle and `C/D` should stay conditional
 - `数据时间戳`: the explicit verified anchor-session date or data timestamp
 - `卖出时间`: when profit-taking or review should happen
 - `持有周期`: expected holding window
